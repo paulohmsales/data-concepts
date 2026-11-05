@@ -111,4 +111,25 @@ export const modules: ModuleEntry[] = [
     summary: 'full reloads, watermarks, SCD2 history, hard deletes, late data and idempotent retries.',
     Component: lazy(() => import('./snapshots/Snapshots.tsx')),
   },
+  {
+    slug: 'retries-idempotency',
+    title: 'Retries and idempotency',
+    category: 'Data engineering',
+    summary: 'lost acks, at-least-once delivery, double charges and the idempotency key that fixes them.',
+    Component: lazy(() => import('./retries/Retries.tsx')),
+  },
+  {
+    slug: 'late-data',
+    title: 'Late data and watermarks',
+    category: 'Data engineering',
+    summary: 'event time vs processing time, allowed lateness, dropped stragglers and the outage spike.',
+    Component: lazy(() => import('./late-data/LateData.tsx')),
+  },
+  {
+    slug: 'partitioning',
+    title: 'Partitioning',
+    category: 'Data engineering',
+    summary: 'pruning, the function that disables it, small files and the hot key that stalls a job.',
+    Component: lazy(() => import('./partitioning/Partitioning.tsx')),
+  },
 ]
