@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router'
 import { useCatalog } from '../lib/api.ts'
 import { useModule } from '../lib/moduleContext.ts'
@@ -44,6 +44,9 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
     ...(m.check.length ? [{ id: 'check', label: 'Check yourself' }] : []),
   ]
   const active = useScrollSpy(sections.map((s) => s.id))
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const stageVisible = useInView(stageRef)
   const progress = useProgress()
   const mp = progress.modules[m.slug]
   const meta = modules.find((x) => x.slug === m.slug)
@@ -100,7 +103,7 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
         </section>
       )}
 
-      <div className={controls ? styles.stage : styles.stageWide}>
+      <div ref={stageRef} className={controls ? styles.stage : styles.stageWide}>
         <div className={styles.stageMain}>
           <section id="lab" className={styles.lab}>
             {play}
@@ -112,9 +115,13 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
           </section>
         </div>
         {controls && (
-          <aside className={styles.controls} aria-label="Lab controls">
+          <aside className={`${styles.controls} ${sheetOpen ? styles.sheetOpen : ''} ${stageVisible ? '' : styles.sheetHidden}`} aria-label="Lab controls">
+            {/* on narrow screens the controls are a bottom sheet, so the chart stays visible while you drag */}
+            <button type="button" className={styles.sheetToggle} aria-expanded={sheetOpen} onClick={() => setSheetOpen((o) => !o)}>
+              Controls <span aria-hidden>{sheetOpen ? '▾' : '▴'}</span>
+            </button>
             <div className={styles.controlsTitle}>Controls</div>
-            {controls}
+            <div className={styles.controlsBody}>{controls}</div>
           </aside>
         )}
       </div>
@@ -179,4 +186,17 @@ function useScrollSpy(ids: string[]) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [key])
   return active
+}
+
+/** Whether an element is at least partly on screen (the mobile controls sheet only shows while the lab is). */
+function useInView(ref: RefObject<HTMLElement | null>): boolean {
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { rootMargin: '0px 0px -40px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [ref])
+  return visible
 }

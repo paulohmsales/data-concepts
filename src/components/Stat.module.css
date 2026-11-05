@@ -26,3 +26,18 @@
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .stat {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .value {
+    font-size: 1.15rem;
+  }
+}
