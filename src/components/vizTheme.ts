@@ -1,0 +1,54 @@
+import { useEffect, useState } from 'react'
+
+/**
+ * Chart colors (dataviz reference palette). Plot writes colors into SVG attributes, where CSS
+ * var() is unreliable, so we pass concrete hex and swap the whole set on color-scheme change.
+ */
+export interface VizTheme {
+  surface: string
+  ink: string
+  inkSecondary: string
+  muted: string
+  grid: string
+  axis: string
+  series1: string // blue
+  series2: string // orange
+  neutral: string // de-emphasised marks
+}
+
+const LIGHT: VizTheme = {
+  surface: '#fcfcfb',
+  ink: '#0b0b0b',
+  inkSecondary: '#52514e',
+  muted: '#898781',
+  grid: '#e1e0d9',
+  axis: '#c3c2b7',
+  series1: '#2a78d6',
+  series2: '#eb6834',
+  neutral: '#c3c2b7',
+}
+
+const DARK: VizTheme = {
+  surface: '#1a1a19',
+  ink: '#f0efec',
+  inkSecondary: '#c3c2b7',
+  muted: '#898781',
+  grid: '#2c2c2a',
+  axis: '#383835',
+  series1: '#3987e5',
+  series2: '#d95926',
+  neutral: '#52514e',
+}
+
+const query = '(prefers-color-scheme: dark)'
+
+export function useVizTheme(): VizTheme {
+  const [dark, setDark] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const onChange = (e: MediaQueryListEvent) => setDark(e.matches)
+    m.addEventListener('change', onChange)
+    return () => m.removeEventListener('change', onChange)
+  }, [])
+  return dark ? DARK : LIGHT
+}

@@ -27,10 +27,12 @@ export function normal(rng: Rng): number {
 /**
  * Number of successes in n Bernoulli(p) trials.
  *
- * Exact for typical A/B sizes: instead of flipping n coins, jump straight to the next success.
- * The gap between successes is geometric, so it costs ~n·p draws, not n.
- * When the variance n·p·(1−p) is large (> 1,000, i.e. SD > 31.6; skew < 0.03), the binomial is
- * indistinguishable from a normal at this resolution, so we use that and stay fast.
+ * Variance n·p·(1−p) ≤ 1,000: exact. Weigh each count k by P(k)/P(mode), using the ratio
+ * P(k+1)/P(k) = (n−k)/(k+1) · p/(1−p), out to where the weight drops below 1e-17 (about ±9 SD),
+ * then pick a k with one uniform draw over the total weight. A few hundred multiplications, no logs.
+ *
+ * Variance > 1,000 (SD > 31.6, skew < 0.03): the binomial is indistinguishable from a normal at
+ * this resolution, so use that.
  */
 export function binomial(n: number, p: number, rng: Rng): number {
   if (n <= 0 || p <= 0) return 0
@@ -43,14 +45,41 @@ export function binomial(n: number, p: number, rng: Rng): number {
     return Math.min(n, Math.max(0, x))
   }
 
-  const logQ = Math.log(1 - p)
-  let count = 0
-  let pos = 0
-  for (;;) {
-    let u = 0
-    while (u === 0) u = rng()
-    pos += Math.floor(Math.log(u) / logQ) + 1
-    if (pos > n) return count
-    count++
+  const r = p / (1 - p)
+  const mode = Math.floor((n + 1) * p)
+  const EPS = 1e-17
+
+  // Pass 1: total weight (mode has weight 1).
+  let total = 1
+  let w = 1
+  for (let k = mode; k > 0; k--) {
+    w *= k / ((n - k + 1) * r) // weight of k−1
+    if (w < EPS) break
+    total += w
   }
+  w = 1
+  for (let k = mode; k < n; k++) {
+    w *= ((n - k) / (k + 1)) * r // weight of k+1
+    if (w < EPS) break
+    total += w
+  }
+
+  // Pass 2: walk the same weights in the same order until the draw is used up.
+  let u = rng() * total - 1
+  if (u < 0) return mode
+  w = 1
+  for (let k = mode; k > 0; k--) {
+    w *= k / ((n - k + 1) * r)
+    if (w < EPS) break
+    u -= w
+    if (u < 0) return k - 1
+  }
+  w = 1
+  for (let k = mode; k < n; k++) {
+    w *= ((n - k) / (k + 1)) * r
+    if (w < EPS) break
+    u -= w
+    if (u < 0) return k + 1
+  }
+  return mode // only reachable through float rounding at the very edge
 }

@@ -1,0 +1,13 @@
+.list li {
+  margin-bottom: 1rem;
+}
+
+.list p {
+  margin: 0.25rem 0;
+}
+
+.list summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

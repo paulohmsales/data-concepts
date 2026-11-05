@@ -1,0 +1,20 @@
+.stale {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.seed {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.seed input {
+  width: 6rem;
+}
+
+.reset {
+  align-self: flex-start;
+}

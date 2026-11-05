@@ -1,0 +1,8 @@
+.figure {
+  width: 100%;
+  min-height: 1px;
+}
+
+.figure :global(svg) {
+  overflow: visible;
+}

@@ -50,9 +50,27 @@ describe('binomial', () => {
     expect(Math.abs(variance / trueVar - 1)).toBeLessThan(0.05)
   }
 
-  it('matches mean and variance (exact path, small p)', () => check(1000, 0.02))
+  it('matches mean and variance (exact path, small mean)', () => check(1000, 0.02))
   it('matches mean and variance (exact path, p > 0.5)', () => check(200, 0.9))
+  it('matches mean and variance (exact path, large mean)', () => check(10_000, 0.1))
+  it('matches mean and variance (exact path, tiny p)', () => check(100_000, 0.00002))
   it('matches mean and variance (normal path)', () => check(100_000, 0.3))
+
+  it('matches exact probabilities for a small case', () => {
+    // Binomial(10, 0.3): P(0..10) computed by the formula
+    const n = 10
+    const p = 0.3
+    const choose = (k: number): number => (k === 0 ? 1 : (choose(k - 1) * (n - k + 1)) / k)
+    const exact = Array.from({ length: n + 1 }, (_, k) => choose(k) * p ** k * (1 - p) ** (n - k))
+    const rng = mulberry32(9)
+    const draws = 200_000
+    const counts = new Array(n + 1).fill(0)
+    for (let i = 0; i < draws; i++) counts[binomial(n, p, rng)]++
+    for (let k = 0; k <= n; k++) {
+      const se = Math.sqrt((exact[k] * (1 - exact[k])) / draws)
+      expect(Math.abs(counts[k] / draws - exact[k])).toBeLessThan(5 * se + 1e-6)
+    }
+  })
 
   it('handles edge cases', () => {
     const rng = mulberry32(1)

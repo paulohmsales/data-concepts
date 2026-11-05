@@ -1,9 +1,12 @@
 :root {
-  --fg: #1a1a1a;
-  --muted: #5f6368;
-  --bg: #ffffff;
-  --border: #e3e3e3;
-  --accent: #2a6fdb;
+  --fg: #0b0b0b;
+  --muted: #52514e;
+  --bg: #f9f9f7;
+  --surface: #fcfcfb;
+  --border: #e1e0d9;
+  --accent: #2a78d6;
+  /* Observable Plot tooltip background */
+  --plot-background: #fcfcfb;
 
   color-scheme: light dark;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -14,11 +17,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fg: #e8e8e8;
-    --muted: #a0a4a8;
-    --bg: #141414;
-    --border: #2e2e2e;
-    --accent: #7aa7ff;
+    --fg: #f0efec;
+    --muted: #c3c2b7;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --border: #2c2c2a;
+    --accent: #3987e5;
+    --plot-background: #1a1a19;
   }
 }
 
@@ -34,4 +39,25 @@ body {
 
 a {
   color: var(--accent);
+}
+
+h2 {
+  margin-top: 0;
+}
+
+h3 {
+  margin: 2rem 0 0.25rem;
+}
+
+.lede {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.try {
+  border-left: 3px solid var(--accent);
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.925rem;
 }

@@ -7,10 +7,12 @@ interface Props {
   play: ReactNode
   breakIt: ReactNode
   explainBack: ReactNode
+  /** Optional sticky sidebar with the module's controls, shared by every part. */
+  controls?: ReactNode
 }
 
 /** The four-part template every module follows (PLAN.md §2.1). */
-export default function ModuleLayout({ title, intuition, play, breakIt, explainBack }: Props) {
+export default function ModuleLayout({ title, intuition, play, breakIt, explainBack, controls }: Props) {
   const parts = [
     { id: 'intuition', heading: '1. Intuition', body: intuition },
     { id: 'play', heading: '2. Play', body: play },
@@ -28,12 +30,17 @@ export default function ModuleLayout({ title, intuition, play, breakIt, explainB
           </a>
         ))}
       </nav>
-      {parts.map((p) => (
-        <section key={p.id} id={p.id} className={styles.part}>
-          <h2>{p.heading}</h2>
-          {p.body}
-        </section>
-      ))}
+      <div className={controls ? styles.withControls : undefined}>
+        {controls && <aside className={styles.controls}>{controls}</aside>}
+        <div className={styles.content}>
+          {parts.map((p) => (
+            <section key={p.id} id={p.id} className={styles.part}>
+              <h2>{p.heading}</h2>
+              {p.body}
+            </section>
+          ))}
+        </div>
+      </div>
     </article>
   )
 }
