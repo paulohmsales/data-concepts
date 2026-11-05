@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useCatalog } from '../lib/api.ts'
 import type { ExperimentContent, InterviewContent } from '../lib/content.ts'
 import { mark, useProgress } from '../lib/progress.ts'
+import { useEntries, type Prediction, type Rating } from '../lib/entries.ts'
 import Markdown from './Markdown.tsx'
 import styles from './content.module.css'
 
@@ -75,52 +76,143 @@ export function Related({ slugs }: { slugs: string[] }) {
 
 /** Guided experiments from content: set it up (via the lab's preset handler), look, then reveal why. */
 export function Experiments({ items, onPreset, slug }: { items: ExperimentContent[]; onPreset?: (params: Record<string, unknown>) => void; slug?: string }) {
-  const [open, setOpen] = useState<number | null>(null)
   const [active, setActive] = useState<number | null>(null)
   const progress = useProgress()
   const doneSet = new Set(slug ? (progress.modules[slug]?.experiment ?? []) : [])
+  const { entries, loaded, setPrediction } = useEntries(slug)
   return (
     <ol className={styles.experiments}>
       {items.map((e, i) => (
-        <li key={e.title} className={`${styles.experiment} ${active === i ? styles.expActive : ''} ${doneSet.has(i) ? styles.expDone : ''}`}>
-          <div className={styles.expHead}>
-            {slug ? (
-              <Tick checked={doneSet.has(i)} onChange={(v) => mark(slug, 'experiment', i, v)} label={`Experiment ${i + 1} done`} num={i + 1} />
-            ) : (
-              <span className={styles.expNum}>{i + 1}</span>
-            )}
-            <div className={styles.expBody}>
-              <strong>{e.title}</strong>
-              <Markdown md={e.goal} />
-            </div>
-            {e.setup && onPreset && (
-              <button
-                type="button"
-                className={styles.setup}
-                onClick={() => {
+        <ExperimentItem
+          key={e.title}
+          e={e}
+          i={i}
+          slug={slug}
+          done={doneSet.has(i)}
+          active={active === i}
+          prediction={slug ? entries.predictions[i] : { text: '', rating: null }}
+          ready={!slug || loaded}
+          onPredict={(p) => setPrediction(i, p)}
+          onSetup={
+            e.setup && onPreset
+              ? () => {
                   onPreset(e.setup!)
                   setActive(i)
                   if (slug) mark(slug, 'experiment', i, true)
-                }}
-              >
-                {active === i ? 'Set up ✓' : 'Set it up'}
-              </button>
-            )}
+                }
+              : undefined
+          }
+        />
+      ))}
+    </ol>
+  )
+}
+
+const RATINGS: { value: Rating; label: string }[] = [
+  { value: 'right', label: 'I was right' },
+  { value: 'partly', label: 'Partly' },
+  { value: 'wrong', label: 'I was wrong' },
+]
+
+/**
+ * One experiment. "Look for" and "Why" stay hidden until you write down what you expect (or skip),
+ * because committing to a prediction first is what makes the result stick.
+ */
+function ExperimentItem({
+  e,
+  i,
+  slug,
+  done,
+  active,
+  prediction,
+  ready,
+  onPredict,
+  onSetup,
+}: {
+  e: ExperimentContent
+  i: number
+  slug?: string
+  done: boolean
+  active: boolean
+  prediction: Prediction | undefined
+  ready: boolean
+  onPredict: (p: Prediction) => void
+  onSetup?: () => void
+}) {
+  const [draft, setDraft] = useState('')
+  const [whyOpen, setWhyOpen] = useState(false)
+  const revealed = prediction !== undefined
+  return (
+    <li className={`${styles.experiment} ${active ? styles.expActive : ''} ${done ? styles.expDone : ''}`}>
+      <div className={styles.expHead}>
+        {slug ? (
+          <Tick checked={done} onChange={(v) => mark(slug, 'experiment', i, v)} label={`Experiment ${i + 1} done`} num={i + 1} />
+        ) : (
+          <span className={styles.expNum}>{i + 1}</span>
+        )}
+        <div className={styles.expBody}>
+          <strong>{e.title}</strong>
+          <Markdown md={e.goal} />
+        </div>
+        {onSetup && (
+          <button type="button" className={styles.setup} onClick={onSetup}>
+            {active ? 'Set up ✓' : 'Set it up'}
+          </button>
+        )}
+      </div>
+      {!revealed ? (
+        <form
+          className={styles.predict}
+          onSubmit={(ev) => {
+            ev.preventDefault()
+            if (draft.trim().length >= 3) onPredict({ text: draft.trim(), rating: null })
+          }}
+        >
+          <label htmlFor={`predict-${slug}-${i}`}>Before you look: what do you expect to happen, and why?</label>
+          <textarea id={`predict-${slug}-${i}`} rows={2} value={draft} onChange={(ev) => setDraft(ev.target.value)} placeholder="e.g. the false-positive rate goes up because…" disabled={!ready} />
+          <div className={styles.predictActions}>
+            <button type="submit" disabled={!ready || draft.trim().length < 3}>
+              Reveal
+            </button>
+            <button type="button" className={styles.skip} disabled={!ready} onClick={() => onPredict({ text: '', rating: null })}>
+              Skip and show me
+            </button>
           </div>
+        </form>
+      ) : (
+        <>
+          {prediction.text && (
+            <div className={styles.yourGuess}>
+              <span>You predicted</span> {prediction.text}
+              <div className={styles.rate} role="group" aria-label="How did your prediction do?">
+                {RATINGS.map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    aria-pressed={prediction.rating === r.value}
+                    className={prediction.rating === r.value ? `${styles.rateOn} ${styles[r.value]}` : undefined}
+                    onClick={() => onPredict({ ...prediction, rating: prediction.rating === r.value ? null : r.value })}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className={styles.look}>
             <span>Look for</span> <Markdown md={e.look} inline />
           </div>
-          <button type="button" className={styles.whyToggle} onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}>
-            {open === i ? 'Hide why' : 'Why does this happen?'}
+          <button type="button" className={styles.whyToggle} onClick={() => setWhyOpen((o) => !o)} aria-expanded={whyOpen}>
+            {whyOpen ? 'Hide why' : 'Why does this happen?'}
           </button>
-          {open === i && (
+          {whyOpen && (
             <div className={styles.why}>
               <Markdown md={e.why} />
             </div>
           )}
-        </li>
-      ))}
-    </ol>
+        </>
+      )}
+    </li>
   )
 }
 

@@ -114,11 +114,18 @@ export default function ProgressPanel() {
           <div className={styles.muted}>
             {studiedDays} day{studiedDays === 1 ? '' : 's'} studied · current streak {streak} day{streak === 1 ? '' : 's'}
           </div>
+          {p.predictions && p.predictions.made > 0 && (
+            <div className={styles.muted}>
+              {p.predictions.made} prediction{p.predictions.made === 1 ? '' : 's'} made
+              {p.predictions.right + p.predictions.partly + p.predictions.wrong > 0 &&
+                ` · ${Math.round(((p.predictions.right + 0.5 * p.predictions.partly) / (p.predictions.right + p.predictions.partly + p.predictions.wrong)) * 100)}% right (partly counts half)`}
+            </div>
+          )}
           <button
             type="button"
             className={styles.reset}
             onClick={() => {
-              if (window.confirm('Reset all your progress? This cannot be undone.')) void resetProgress()
+              if (window.confirm('Reset all your progress, including predictions? Your notes are kept. This cannot be undone.')) void resetProgress()
             }}
           >
             Reset progress

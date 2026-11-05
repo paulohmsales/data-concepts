@@ -177,7 +177,7 @@
   color: var(--fg-2);
 }
 
-.look span {
+.look > span:first-child {
   font-weight: 700;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -370,4 +370,107 @@
 .canAnswerOn:hover:not(:disabled) {
   background: var(--good);
   color: #fff;
+}
+
+/* predict before you see */
+.predict {
+  margin: 0.7rem 0 0 2.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.predict label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.predict textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  resize: vertical;
+}
+
+.predictActions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.predictActions button[type='submit'] {
+  font-weight: 600;
+}
+
+.skip {
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 0;
+}
+
+.skip:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.yourGuess {
+  margin: 0.7rem 0 0 2.45rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.9rem;
+}
+
+.yourGuess > span:first-child {
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-right: 0.3rem;
+}
+
+.rate {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.rate button {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.rateOn.right {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.rateOn.partly {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.rateOn.wrong {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+@media (max-width: 600px) {
+  .predict,
+  .yourGuess,
+  .look,
+  .whyToggle,
+  .why {
+    margin-left: 0;
+  }
 }

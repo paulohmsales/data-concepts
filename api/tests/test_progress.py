@@ -41,8 +41,26 @@ def test_unticking_and_reset(client):
     assert client.get("/api/progress", headers=auth("ana")).json()["modules"] == {}
     client.put("/api/progress/clt", json={"kind": "check", "item": 1}, headers=auth("ana"))
     client.delete("/api/progress", headers=auth("ana"))
-    assert client.get("/api/progress", headers=auth("ana")).json() == {"user": "ana", "modules": {}, "days": {}}
+    assert client.get("/api/progress", headers=auth("ana")).json() == {"user": "ana", "modules": {}, "days": {}, "predictions": {"made": 0, "right": 0, "partly": 0, "wrong": 0}}
 
 
 def test_rejects_unknown_kinds(client):
     assert client.put("/api/progress/clt", json={"kind": "hack"}).status_code == 422
+
+
+def test_entries_notes_and_predictions(client):
+    h = auth("ana")
+    assert client.get("/api/progress/rag/entries", headers=h).json() == {"note": "", "predictions": {}}
+    client.put("/api/progress/rag/entries", json={"kind": "note", "text": "BM25 misses synonyms"}, headers=h)
+    client.put("/api/progress/rag/entries", json={"kind": "prediction", "item": 1, "text": "recall drops"}, headers=h)
+    client.put("/api/progress/rag/entries", json={"kind": "prediction", "item": 1, "text": "recall drops", "rating": "partly"}, headers=h)
+    e = client.get("/api/progress/rag/entries", headers=h).json()
+    assert e["note"] == "BM25 misses synonyms"
+    assert e["predictions"]["1"] == {"text": "recall drops", "rating": "partly"}
+    assert client.get("/api/progress", headers=h).json()["predictions"] == {"made": 1, "right": 0, "partly": 1, "wrong": 0}
+    # other users see nothing; reset clears predictions but keeps notes
+    assert client.get("/api/progress/rag/entries", headers=auth("bruno")).json()["note"] == ""
+    client.delete("/api/progress", headers=h)
+    e = client.get("/api/progress/rag/entries", headers=h).json()
+    assert e["note"] == "BM25 misses synonyms" and e["predictions"] == {}
+    assert client.put("/api/progress/rag/entries", json={"kind": "prediction", "rating": "maybe"}, headers=h).status_code == 422

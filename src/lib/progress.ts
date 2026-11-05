@@ -15,6 +15,7 @@ export interface Progress {
   user: string
   modules: Record<string, ModuleProgress>
   days: Record<string, number>
+  predictions?: { made: number; right: number; partly: number; wrong: number }
 }
 
 const EMPTY: Progress = { user: '', modules: {}, days: {} }
