@@ -1,0 +1,143 @@
+slug: surge-pricing
+title: "System design: surge pricing"
+track: data-engineering
+summary: a classic data system design interview, worked end to end. Streaming demand and supply per map cell, and the window and cell-size trade-offs you can see in the lab.
+roles: [de, swe, mle]
+lab: surge-pricing
+order: 9
+
+intuition: |
+  Surge pricing raises prices where demand outruns the drivers nearby, which both rations scarce rides and pulls drivers toward the busy area. As a data system it is a **real-time aggregation problem**: count ride requests and available drivers per small area of the map, over a recent time window, and turn the ratio into a price multiplier that every rider's app can read within seconds.
+
+  Two design knobs decide whether it feels fair:
+
+  - **Window length.** Counting over the last minute reacts fast but jumps around on random noise; counting over 15 minutes is stable but slow to rise and slow to fall.
+  - **Cell size.** Small cells capture a hotspot precisely but each has few events, so the estimate is noisy; big cells are stable but blend a busy block with quiet streets around it.
+
+  The lab shows both on a simulated city where a concert lets out at minute 60.
+
+experiments:
+  - title: Flicker
+    goal: 250 m cells, 1-minute window.
+    setup: {cell: 1, window: 1}
+    look: The concert surges immediately, but about 39% of quiet cell-minutes also show a surge. Scrub the minute slider and the map twinkles.
+    why: |
+      A 250 m cell sees about 0.5 requests a minute. One minute of counts is mostly Poisson noise, so two requests instead of zero triggers surge. Riders see prices jump for no reason.
+  - title: The sweet spot
+    goal: 500 m cells, 5-minute window.
+    setup: {cell: 2, window: 5}
+    look: False surges drop to 1–2%, the concert cell reaches about 2.6–3× within a minute or two, and surge fades a few minutes after the crowd leaves.
+    why: |
+      Each estimate now pools 4 cells × 5 minutes ≈ 10 expected requests, so the noise is much smaller relative to the signal, while the concert still fills most of its cell.
+  - title: Too smooth
+    goal: Keep 500 m cells, 15-minute window.
+    setup: {cell: 2, window: 15}
+    look: Surge lingers for about 12 minutes after the crowd has gone, and rises more slowly.
+    why: |
+      The window still contains the busy minutes long after they ended. Riders arriving later pay surge with no shortage, and drivers are pulled to an area that no longer needs them. Exponentially weighted averages or shorter windows with a minimum event count reduce the lag.
+  - title: Too coarse
+    goal: 1 km cells, 5-minute window.
+    setup: {cell: 4, window: 5}
+    look: The concert's cell only reaches about 1.4×. The hotspot is averaged with 12 quiet blocks around it.
+    why: |
+      Big cells are stable but dilute local shortages. Production systems use hierarchical hexagonal grids (Uber's open-source H3) and smooth across neighbouring cells instead of simply making cells bigger.
+
+deep_dive:
+  - type: heading
+    text: 1 · Clarify requirements
+  - type: table
+    columns:
+      - {key: kind, label: Kind}
+      - {key: req, label: Requirement}
+    rows:
+      - {kind: Functional, req: "Compute a multiplier per area from recent demand (requests, app opens) and supply (available drivers)"}
+      - {kind: Functional, req: "Show the price in the rider app; lock the quoted price for a few minutes"}
+      - {kind: Functional, req: "Keep history for analytics, audits and model training"}
+      - {kind: Non-functional, req: "Freshness: prices reflect the last ~1–2 minutes; updates every 30–60 s"}
+      - {kind: Non-functional, req: "Read latency: price lookups under ~50 ms at peak app traffic"}
+      - {kind: Non-functional, req: "Availability over consistency: if surge is unavailable, fall back to 1× rather than block rides"}
+      - {kind: Non-functional, req: "Stability and fairness: no flicker; caps on the multiplier; explainable to regulators"}
+  - type: heading
+    text: 2 · Back-of-the-envelope
+  - type: steps
+    items:
+      - title: Driver locations
+        md: 50,000 active drivers in a big city, each sending GPS every 4 s, gives about 12,500 events/s, roughly 1 GB/hour at ~100 bytes each.
+      - title: Demand events
+        md: Ride requests and app opens at peak, perhaps 2,000–5,000 events/s per city.
+      - title: State
+        md: A 30 × 30 km city at 500 m cells is about 3,600 cells. Even keeping per-minute counts for 15 minutes is a few hundred thousand numbers, so state is tiny; throughput and latency are the hard parts.
+      - title: Reads
+        md: Every app open and fare quote reads the price, tens of thousands of reads/s. That's a key-value lookup by cell id served from a cache, never a query against the stream processor.
+  - type: heading
+    text: 3 · Architecture
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: apps, label: Rider and driver apps, sub: "requests, GPS pings", col: 0, row: 0}
+        - {id: gw, label: Ingestion API, sub: "validate, enrich with cell id", col: 1, row: 0}
+        - {id: kafka, label: Kafka, sub: "topics keyed by cell", col: 2, row: 0}
+        - {id: flink, label: Stream processor, sub: "Flink: windowed counts per cell", col: 3, row: 0}
+        - {id: price, label: Pricing service, sub: "ratio → multiplier, smoothing, caps", col: 3, row: 1}
+        - {id: kv, label: Price cache, sub: "Redis: cell → multiplier, TTL", col: 2, row: 1}
+        - {id: lake, label: Lake / warehouse, sub: "history, audits, model training", col: 1, row: 1}
+        - {id: quote, label: Fare quote API, col: 0, row: 1}
+      edges:
+        - {from: apps, to: gw}
+        - {from: gw, to: kafka}
+        - {from: kafka, to: flink}
+        - {from: flink, to: price}
+        - {from: price, to: kv}
+        - {from: kv, to: quote}
+        - {from: quote, to: apps}
+        - {from: kafka, to: lake}
+    steps:
+      - title: Ingest and geo-index
+        md: The API converts each lat/long to a cell id (H3 hexagon at a fixed resolution) and publishes to Kafka. Keying by cell id keeps a cell's events in order on one partition.
+        state: {active: [apps, gw, kafka]}
+      - title: Windowed aggregation
+        md: The stream processor keeps sliding or hopping windows (e.g. 5 minutes, sliding every 30 s) of demand and supply counts per cell, using event time with a watermark so late GPS pings land in the right window (see Late data and watermarks).
+        state: {active: [kafka, flink]}
+      - title: Price, then smooth
+        md: "The pricing service turns demand/supply into a multiplier, smooths across neighbouring cells and over time, applies caps and business rules, and writes `cell → multiplier` with a short TTL."
+        state: {active: [flink, price, kv]}
+      - title: Serve reads from the cache
+        md: The fare quote API reads the multiplier for the rider's cell and locks the quoted price for a few minutes. If the key is missing or stale, it serves 1×. Availability matters more than a perfectly fresh price.
+        state: {active: [kv, quote, apps]}
+      - title: Keep everything for later
+        md: The same Kafka topics land in the lake for audits (why was this ride 2.3×?), dashboards, backtesting the pricing logic, and training demand-forecast models that can surge before the shortage happens.
+        state: {active: [kafka, lake]}
+  - type: heading
+    text: 4 · Deep-dive questions interviewers ask
+  - type: table
+    columns:
+      - {key: q, label: Question}
+      - {key: a, label: Good answer includes}
+    rows:
+      - {q: "Hot partitions at a stadium?", a: "Key by cell, not city; a single hot cell is still small (thousands of events/s); salt or pre-aggregate in the API if needed"}
+      - {q: "Late or out-of-order GPS pings?", a: "Event-time windows with a watermark of a few seconds; drop or side-output very late events"}
+      - {q: "Processor crashes?", a: "Checkpointed state (Flink), replay from Kafka offsets; the cache keeps serving the last prices until TTL"}
+      - {q: "Exactly-once?", a: "Not needed for counts that feed a price; idempotent writes of the latest multiplier per cell are enough"}
+      - {q: "Gaming (drivers going offline to trigger surge)?", a: "Count supply robustly (recently online drivers), anomaly detection, caps"}
+      - {q: "How do you know it works?", a: "Switchback experiments by city and time slot, since riders and drivers interact (A/B by user is contaminated); metrics: completion rate, wait time, driver utilisation"}
+  - type: callout
+    kind: note
+    title: How to run this interview
+    md: Spend the first 5 minutes on requirements and numbers, then draw the simple pipeline end to end before optimising anything. Name the trade-offs explicitly (window length, cell size, freshness vs stability, availability vs consistency) and say which you'd choose and why. Interviewers score the reasoning, not the boxes.
+  - type: related
+    slugs: [late-data, partitioning, queues, caching, ab-testing]
+
+interview:
+  - level: mid
+    q: Why not compute surge by querying the warehouse every minute?
+    answer: Warehouse queries take seconds to minutes and are priced by scan. Doing that for thousands of cells every 30 s at peak is slow, costly and fragile. Streaming aggregation keeps small per-cell state in memory and updates it as events arrive; the warehouse is for history and analysis.
+    listen_for: [Latency, Cost, Stateful streaming, Warehouse for history]
+  - level: senior
+    q: How would you choose the window and the cell size?
+    answer: Both trade noise against responsiveness. Small windows or cells react fast but flicker on Poisson noise; large ones are stable but lag or dilute hotspots. Pick a minimum expected event count per estimate (e.g. at least 10), use a hierarchical grid with neighbour smoothing, and tune with backtests on real event history, measuring false surges, reaction time, and after-event lingering.
+    listen_for: [Noise vs responsiveness, Minimum counts, Neighbour smoothing, Backtesting with metrics]
+  - level: senior
+    q: How would you test whether a new surge algorithm is better?
+    answer: Riders and drivers in the same area interact, so randomising by user contaminates the comparison. Use switchback tests (alternate the algorithm by city and time slot) or geo-randomisation by region, with enough slots for power. Measure completion rate, wait time, cancellations, driver earnings and rider retention, and guardrails on extreme multipliers.
+    listen_for: [Interference between units, Switchback or geo design, Market-level metrics, Guardrails]
