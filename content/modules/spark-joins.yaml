@@ -1,0 +1,137 @@
+slug: spark-joins
+title: Spark joins, shuffles and skew
+track: data-engineering
+summary: broadcast vs sort-merge joins, why shuffle partitions spill, how one hot key makes a straggler that more machines can't fix, and what adaptive query execution does about it.
+roles: [de, mle]
+lab: spark
+order: 7
+
+intuition: |
+  Spark splits a job into **stages** and each stage into **tasks**, one per slice of data, run in parallel on the cluster's cores. A stage finishes when its **slowest** task finishes.
+
+  Joining two big tables needs rows with the same key on the same machine, so Spark **shuffles**: every task writes its rows into buckets by key, and the next stage reads one bucket per task. Shuffles move data over the network and through disk, and they're usually the most expensive part of a job.
+
+  There are two ways out:
+
+  - If one side is small, **broadcast** it: send a full copy to every executor and join locally, with no shuffle at all.
+  - If both sides are big, shuffle, but make the buckets even. One hot key puts a huge bucket on one task, and the whole cluster waits for it.
+
+experiments:
+  - title: The default plan
+    goal: Join a 500 GB fact table to a 50 MB dimension with default settings (broadcast threshold 10 MB, 200 shuffle partitions).
+    setup: {}
+    look: A sort-merge join shuffles 500 GB. Every one of the 200 reduce tasks spills to disk, and the job takes about 11 minutes.
+    why: |
+      50 MB is above the 10 MB default threshold, so Spark shuffles both sides. 500 GB over 200 partitions is 2.5 GB per task, which doesn't fit in a task's memory, so each sorts in pieces on disk (spill), roughly doubling its time.
+  - title: Broadcast it
+    goal: Raise the broadcast threshold to 100 MB.
+    setup: {broadcastMb: 100}
+    look: Broadcast hash join, no shuffle, about 2 minutes, five times faster.
+    why: |
+      Each executor gets the 50 MB dimension once, and the fact table is joined where it's read. Use a broadcast hint (`broadcast(dim)`) or raise the threshold for dimensions up to a few hundred MB, but not gigabytes.
+  - title: Right-size the shuffle
+    goal: Keep the sort-merge join but use 1,000 shuffle partitions.
+    setup: {shufflePartitions: 1000}
+    look: Tasks drop to about 500 MB each and nothing spills. The job takes about 7 minutes instead of 11.
+    why: |
+      A useful rule of thumb is 100–200 MB of shuffle data per partition. 200 (the default) is right for a few tens of GB, not for 500 GB. AQE's partition coalescing lets you set a high number and merges small partitions automatically.
+  - title: The straggler
+    goal: 1,000 partitions, but 20% of fact rows share one join key (e.g. customer_id = 'unknown').
+    setup: {shufflePartitions: 1000, skew: 0.2}
+    look: The job now takes over an hour. One task handles 100 GB while 999 finish in seconds. The task chart is a single tall bar.
+    why: |
+      All rows with one key go to one partition. The stage waits for that task while the rest of the cluster sits idle.
+  - title: More machines don't help
+    goal: Same skew, double the executors.
+    setup: {shufflePartitions: 1000, skew: 0.2, executors: 20}
+    look: Still over an hour. Only the fast tasks got faster.
+    why: |
+      The straggler runs on one core whatever the cluster size. Skew is a data-layout problem, not a capacity problem.
+  - title: Adaptive query execution
+    goal: Turn on AQE skew join handling.
+    setup: {shufflePartitions: 1000, skew: 0.2, aqe: true}
+    look: Back to about 7 minutes. The hot partition is split into about 400 pieces.
+    why: |
+      AQE looks at real shuffle sizes at runtime, splits partitions much bigger than the median (and replicates the matching rows of the other side), and coalesces tiny ones. Manual alternatives are salting the key, filtering or handling the hot key separately (e.g. 'unknown' rows often shouldn't be joined at all), or broadcasting.
+  - title: Broadcasting too much
+    goal: A 5 GB dimension with the threshold raised to 10 GB.
+    setup: {dimMb: 5000, broadcastMb: 10000}
+    look: The job fails with out of memory.
+    why: |
+      Broadcasting collects the table on the driver and keeps a copy in every executor's memory. Past a few hundred MB that is slower than a shuffle, and past the memory limits it crashes.
+
+deep_dive:
+  - type: heading
+    text: How a sort-merge join runs
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: f, label: fact splits, sub: "128 MB each", col: 0, row: 0}
+        - {id: d, label: dim splits, col: 0, row: 1}
+        - {id: map, label: Map tasks, sub: "hash(key) mod N → bucket", col: 1, row: 0}
+        - {id: sh, label: Shuffle files, sub: "on local disk", col: 2, row: 0}
+        - {id: red, label: Reduce tasks, sub: "one per bucket: sort, merge", col: 3, row: 0}
+        - {id: out, label: Output, col: 3, row: 1}
+      edges:
+        - {from: f, to: map}
+        - {from: d, to: map}
+        - {from: map, to: sh}
+        - {from: sh, to: red}
+        - {from: red, to: out}
+    steps:
+      - title: Read in splits
+        md: Each input file is split into ~128 MB chunks, one task each. Thousands of tasks run in waves over the cluster's cores.
+        state: {active: [f, d, map]}
+      - title: Write shuffle buckets
+        md: Each map task hashes the join key and writes its rows into N buckets (N = spark.sql.shuffle.partitions) on local disk.
+        state: {active: [map, sh]}
+      - title: Fetch, sort, merge
+        md: Reduce task i fetches bucket i from every map task over the network, sorts both sides by key and merges them. If the bucket is bigger than its memory, it spills sorted runs to disk.
+        state: {active: [sh, red]}
+      - title: The stage ends with its slowest task
+        md: A bucket that's 100× bigger than the others (a hot key) is a straggler, and the next stage can't start until it's done.
+        state: {active: [red, out], bad: [red]}
+  - type: heading
+    text: Join strategies
+  - type: table
+    columns:
+      - {key: s, label: Strategy}
+      - {key: when, label: When Spark uses it}
+      - {key: cost, label: Cost}
+    rows:
+      - {s: Broadcast hash join, when: "One side under autoBroadcastJoinThreshold (10 MB default), or a broadcast hint", cost: "No shuffle; memory for a copy per executor"}
+      - {s: Shuffle hash join, when: "One side much smaller but too big to broadcast (when preferred/allowed)", cost: "Shuffle both; build a hash table per partition"}
+      - {s: Sort-merge join, when: "Default for two large tables on equality keys", cost: "Shuffle and sort both; robust, spills gracefully"}
+      - {s: Broadcast nested loop / cartesian, when: "Non-equality conditions (ranges, inequality)", cost: "Very expensive; rewrite the condition if you can"}
+  - type: heading
+    text: Reading the Spark UI
+  - type: steps
+    items:
+      - title: Find the slowest stage
+        md: In the Jobs and Stages tabs, sort by duration. Most of the time is usually one or two stages with a shuffle.
+      - title: Compare max vs median task time
+        md: In the stage's summary metrics, if the max task is 10× the median, you have skew. Look at the max task's shuffle read size.
+      - title: Check spill
+        md: “Spill (disk)” greater than zero means partitions don't fit in memory. Use more shuffle partitions or more memory per core.
+      - title: Read the plan
+        md: "In the SQL tab or `df.explain('formatted')`, look for BroadcastHashJoin vs SortMergeJoin, Exchange (a shuffle), and AQE's `isFinalPlan` showing what actually ran."
+  - type: callout
+    kind: prod
+    md: "Most Spark tuning is data layout, not configuration. Filter and select columns before joins, broadcast small dimensions, partition and cluster tables on the keys you join and filter by (Delta Z-order or liquid clustering, Iceberg sort orders), and deal with hot keys explicitly. Turn AQE on (default since Spark 3.2) and keep shuffle partitions high enough."
+  - type: related
+    slugs: [partitioning, join-fanout, tail-latency, kafka]
+
+interview:
+  - level: mid
+    q: What is a shuffle in Spark and why is it expensive?
+    answer: Redistributing data across the cluster so rows with the same key end up in the same partition, needed for joins, groupBy and repartition. Map tasks write bucketed files to disk, reduce tasks fetch them over the network, then sort or aggregate. It costs disk I/O, network, serialisation and memory, and it's a stage boundary.
+    listen_for: [Redistribution by key, Disk and network, Stage boundary, Which operations cause it]
+  - level: mid
+    q: When would you use a broadcast join?
+    answer: When one side is small enough to fit comfortably in executor memory (up to a few hundred MB), such as a dimension table. Spark copies it to every executor and joins locally, avoiding a shuffle of the big table. Don't use it for large tables or memory-tight executors.
+    listen_for: [Small side to every executor, Avoids shuffle, Size limits]
+  - level: senior
+    q: A Spark job's last stage has 999 tasks done in a minute and one running for an hour. Diagnose and fix.
+    answer: Classic skew. Confirm in the Spark UI (max vs median shuffle read size and duration) and find the hot key (often null, 'unknown' or a default value, or one huge customer). Fixes are enabling AQE skew join, handling the hot key separately (filter nulls before joining, or join them via broadcast), salting the key on the large side and replicating the small side, or broadcasting the smaller table if possible. More executors won't help because the straggler is one task.
+    listen_for: [Skew diagnosis in the UI, Identify the hot key, AQE skew join, Salting or separate handling, More executors won't help]
