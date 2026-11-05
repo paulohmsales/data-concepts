@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 from pydantic import TypeAdapter, ValidationError
 
-from .schema import Integration, Market, Module, Platforms, Role, Track
+from .schema import Comparison, Integration, Market, Module, Platforms, Role, Track
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTENT = Path(os.environ.get("CONTENT_DIR", ROOT / "content"))
@@ -77,8 +77,10 @@ def load_content(content_dir: Path = DEFAULT_CONTENT) -> dict:
     if len(ids) != len(set(ids)):
         raise ContentError("integrations.yaml: duplicate recipe ids")
 
+    comparisons = _validate(TypeAdapter(list[Comparison]), _load(content_dir / "comparisons.yaml"), "comparisons.yaml")
+
     _check_references(tracks, modules, platforms)
-    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms, "integrations": integrations}
+    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms, "integrations": integrations, "comparisons": comparisons}
 
 
 def _check_references(tracks, modules, platforms) -> None:
@@ -144,6 +146,7 @@ CREATE TABLE dimensions (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE TABLE prices (id INTEGER PRIMARY KEY, provider TEXT, body TEXT NOT NULL);
 CREATE TABLE architectures (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE TABLE integrations (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
+CREATE TABLE comparisons (id TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(kind, ref, title, body, tokenize = 'porter unicode61');
 """
 
@@ -198,6 +201,8 @@ def build(content_dir: Path = DEFAULT_CONTENT, db_path: Path = DEFAULT_DB) -> di
 
     for i, it in enumerate(c["integrations"]):
         con.execute("INSERT INTO integrations VALUES (?, ?, ?)", (it.key, i, j(it)))
+    for i, cmp in enumerate(c["comparisons"]):
+        con.execute("INSERT INTO comparisons VALUES (?, ?, ?)", (cmp.id, i, j(cmp)))
 
     con.commit()
     con.close()

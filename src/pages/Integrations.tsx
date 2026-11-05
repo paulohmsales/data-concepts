@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { useIntegrations } from '../lib/api.ts'
 import type { IntegrationStatus } from '../lib/content.ts'
 import { bytes, useStatus } from '../lib/integrations.ts'
+import CompareEngines from './CompareEngines.tsx'
 import styles from './Pages.module.css'
 import s from './Integrations.module.css'
 
@@ -52,6 +53,7 @@ export default function Integrations() {
           )
         })}
       </div>
+      <CompareEngines status={status} />
       <h3>Guard rails</h3>
       <ol className={styles.howList}>
         <li>

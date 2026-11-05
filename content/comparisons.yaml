@@ -1,0 +1,42 @@
+# The same question on the same data, run on two engines side by side (Integrations page).
+# Only pairs that share a dataset today; four-way comparisons need data loaded into each sandbox.
+
+- id: tpch-revenue
+  title: Revenue by nation, TPC-H
+  question: Total 1995 order value by customer nation, on the TPC-H sample data both platforms ship with (Snowflake's TPCH_SF1 has 1.5 million orders).
+  why: Same data, same SQL, different engines. Compare wall time on a cold and a warm run (Snowflake's result cache and Databricks' disk cache both kick in on repeats). If both samples are the same scale factor the answers match exactly; if Databricks' copy is larger, every revenue is multiplied by the same factor, which is itself a quick check. Neither bills by bytes, so cost depends on how long the warehouse runs.
+  runs:
+    - provider: snowflake
+      sql: |
+        SELECT n.n_name AS nation, ROUND(SUM(o.o_totalprice) / 1e6, 1) AS revenue_m
+        FROM snowflake_sample_data.tpch_sf1.orders o
+        JOIN snowflake_sample_data.tpch_sf1.customer c ON c.c_custkey = o.o_custkey
+        JOIN snowflake_sample_data.tpch_sf1.nation n ON n.n_nationkey = c.c_nationkey
+        WHERE YEAR(o.o_orderdate) = 1995
+        GROUP BY nation
+        ORDER BY revenue_m DESC
+    - provider: databricks
+      sql: |
+        SELECT n.n_name AS nation, ROUND(SUM(o.o_totalprice) / 1e6, 1) AS revenue_m
+        FROM samples.tpch.orders o
+        JOIN samples.tpch.customer c ON c.c_custkey = o.o_custkey
+        JOIN samples.tpch.nation n ON n.n_nationkey = c.c_nationkey
+        WHERE YEAR(o.o_orderdate) = 1995
+        GROUP BY nation
+        ORDER BY revenue_m DESC
+
+- id: noaa-tmax
+  title: US temperatures, NOAA weather records
+  question: Average daily maximum temperature at US stations in 2023, from NOAA's GHCN-Daily records, which BigQuery hosts as a public dataset and AWS hosts as files in S3.
+  why: "Both engines bill by bytes scanned, so the cost comparison is direct. BigQuery reads only the columns used from a table for 2023; Athena reads one year and one element's Parquet files. Expect a few MB on each. The copies are refreshed on different schedules, so counts can differ slightly. On Athena, create the table first (guided lab 1)."
+  runs:
+    - provider: bigquery
+      sql: |
+        SELECT COUNT(*) AS readings, ROUND(AVG(value) / 10.0, 2) AS avg_tmax_c
+        FROM `bigquery-public-data.ghcn_d.ghcnd_2023`
+        WHERE element = 'TMAX' AND id LIKE 'US%'
+    - provider: athena
+      sql: |
+        SELECT COUNT(*) AS readings, ROUND(AVG(data_value) / 10.0, 2) AS avg_tmax_c
+        FROM dc_lab.ghcn
+        WHERE year = 2023 AND element = 'TMAX' AND id LIKE 'US%'

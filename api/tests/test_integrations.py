@@ -114,3 +114,9 @@ def test_snowflake_jwt_shape():
     claims = jwt.decode(tok, key.public_key(), algorithms=["RS256"])
     assert claims["sub"] == "MYORG-MYACCT.LAB_USER"
     assert claims["iss"].startswith("MYORG-MYACCT.LAB_USER.SHA256:")
+
+
+def test_comparisons_content(client):
+    data = client.get("/api/integrations/comparisons").json()
+    assert {c["id"] for c in data} == {"tpch-revenue", "noaa-tmax"}
+    assert all(len(c["runs"]) >= 2 for c in data)

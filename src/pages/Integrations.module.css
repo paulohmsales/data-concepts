@@ -227,3 +227,73 @@
     position: static;
   }
 }
+
+/* engine comparisons */
+.compare {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.compare h3 {
+  margin: 0 0 0.3rem;
+}
+
+.cmpTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.88rem;
+}
+
+.cmpTable th,
+.cmpTable td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.firstRow {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--fg-2);
+}
+
+.cmpError {
+  color: var(--bad);
+  font-size: 0.82rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.sqlPair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.sqlPair pre {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  .cmpTable {
+    display: block;
+    overflow-x: auto;
+  }
+}

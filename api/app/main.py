@@ -99,6 +99,12 @@ def integrations_content():
     return cached(rows("SELECT body FROM integrations ORDER BY ord"))
 
 
+@app.get("/api/integrations/comparisons")
+def comparisons():
+    """The same question on two engines (see content/comparisons.yaml)."""
+    return cached(rows("SELECT body FROM comparisons ORDER BY ord"))
+
+
 @app.get("/api/search")
 def search(q: str = Query(min_length=1, max_length=100)):
     # quote each term so FTS syntax characters in user input can't break the query

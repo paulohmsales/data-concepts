@@ -283,3 +283,16 @@ class Integration(BaseModel):
     config_template: str
     setup: list[SetupStep]
     recipes: list[Recipe]
+
+
+class ComparisonRun(BaseModel):
+    provider: Literal["bigquery", "snowflake", "athena", "databricks"]
+    sql: str
+
+
+class Comparison(BaseModel):
+    id: str
+    title: str
+    question: str
+    why: str
+    runs: list[ComparisonRun]

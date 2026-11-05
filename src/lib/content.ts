@@ -202,3 +202,11 @@ export interface RunLog {
   status: 'ok' | 'error'
   error: string | null
 }
+
+export interface Comparison {
+  id: string
+  title: string
+  question: string
+  why: string
+  runs: { provider: IntegrationKey; sql: string }[]
+}
