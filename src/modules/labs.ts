@@ -40,6 +40,7 @@ export const labs: Record<string, ComponentType> = {
   'dimensional-modeling': lazy(() => import('./dimensional-modeling/DimensionalModeling.tsx')),
   dbt: lazy(() => import('./dbt/Dbt.tsx')),
   'data-quality': lazy(() => import('./data-quality/DataQuality.tsx')),
+  switchback: lazy(() => import('./switchback/Switchback.tsx')),
   'metric-trees': lazy(() => import('./metric-trees/MetricTrees.tsx')),
   drift: lazy(() => import('./drift/Drift.tsx')),
   did: lazy(() => import('./did/Did.tsx')),

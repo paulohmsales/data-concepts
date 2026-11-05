@@ -1,0 +1,90 @@
+slug: switchback
+title: "Marketplace experiments: interference and switchbacks"
+track: experimentation
+summary: why a user-level A/B test overstates effects when treated and control users compete for the same supply, and how switchback designs (randomising time slots) measure the real market effect.
+roles: [ds, da, mgr]
+lab: switchback
+order: 6
+
+intuition: |
+  A standard A/B test assumes one user's treatment doesn't affect another user's outcome. In a marketplace that assumption breaks. Riders and drivers, buyers and sellers, guests and hosts all share supply.
+
+  Give half the riders a discount and they request more rides. When drivers are scarce, those extra rides come from drivers who would otherwise have served the control group. Treated riders look much better than control, but part of the “win” was taken from control, so the market as a whole gained much less. The test measures the **difference between groups**, not the **effect of launching**.
+
+  **Switchback** experiments randomise time instead of users: for the next hour everyone in the city gets the discount, the hour after nobody does, at random. Each slot is a small version of the launched world, so comparing treated and untreated slots estimates the real effect, at the cost of far fewer units (slots, not users) and therefore more noise.
+
+experiments:
+  - title: The A/B test lies
+    goal: Drivers can serve 10% more than average demand (so peaks are tight). The discount raises demand by 20%.
+    setup: {}
+    look: The user-level A/B reports +20.0% every time, with no noise at all. The true market effect is about +8.7%; the switchback averages about +9%, with individual experiments landing within about ±7.6 points (2 SD).
+    why: |
+      In every slot, treated and control riders share the same drivers in proportion to their demand, so their ratio is always 1.2. Precise and wrong. Launching would add rides only where there was spare capacity, mostly off-peak.
+  - title: When interference disappears
+    goal: Plenty of drivers (3× average demand).
+    setup: {capacity: 3}
+    look: Truth, A/B and switchback all agree at about +20%.
+    why: |
+      No competition for supply means no interference. User-level A/B tests are fine when the shared resource isn't constrained, which is why they work for most product features and fail for pricing, matching and inventory.
+  - title: Even tighter supply
+    goal: Drivers can serve only 80% of average demand.
+    setup: {capacity: 0.8}
+    look: The true effect shrinks to about +5.6% while the A/B still says +20%.
+    why: |
+      The tighter the market, the more of the A/B's “effect” is just moving rides between groups. Launch decisions based on it would badly overestimate the value.
+  - title: Block length
+    goal: Compare 30-minute, 4-hour and whole-day blocks.
+    setup: {blockSlots: 8}
+    look: With 4-hour blocks the spread (2 SD) is about ±13 points, versus about ±5.4 for 30-minute blocks and ±4.8 for whole days.
+    why: |
+      Short blocks give many units, but in reality effects carry over (drivers repositioned by the last slot's prices, riders who retry), so very short blocks are biased. 4-hour blocks line up with rush hours, so luck in which blocks land on peaks dominates. Whole-day blocks avoid both but need many days. Practical designs use blocks longer than the carryover, balanced across time of day, and discard a burn-in period after each switch.
+  - title: Run it longer
+    goal: 28 days instead of 14.
+    setup: {days: 28}
+    look: The spread narrows to about ±5.2 points (2 SD), but you've spent four weeks on one experiment.
+    why: |
+      Switchbacks are expensive in time. Variance reduction (regression on pre-period demand, CUPED-style), stratifying by hour and day, and running in several cities at once all help.
+
+deep_dive:
+  - type: heading
+    text: Where interference happens
+  - type: table
+    columns:
+      - {key: where, label: Setting}
+      - {key: shared, label: What's shared}
+      - {key: design, label: Usual design}
+    rows:
+      - {where: "Ride-hailing, delivery", shared: "Drivers, couriers", design: "Switchback by city × time slot"}
+      - {where: "Marketplaces (e-commerce, travel)", shared: "Limited inventory, rankings", design: "Two-sided or cluster randomisation; budget-split for ads"}
+      - {where: "Social networks", shared: "Friends see each other's content", design: "Cluster (graph) randomisation"}
+      - {where: "Pricing, promotions in stores", shared: "Stock, word of mouth", design: "Geo experiments (randomise regions or stores)"}
+      - {where: "Ads auctions", shared: "Budgets, auction prices", design: "Budget-split (each arm gets its own budget)"}
+  - type: heading
+    text: Designing a switchback
+  - type: steps
+    items:
+      - title: Choose the unit
+        md: City × time block. More cities in parallel multiply the number of units; cities can also be paired by size.
+      - title: Choose the block length
+        md: Longer than the carryover (how long the system takes to settle after a switch), short enough to get many blocks. Typical values are 30 minutes to a few hours.
+      - title: Balance time of day and week
+        md: Randomise within strata (each hour of the week gets both arms over the experiment) so peaks don't land by luck on one arm.
+      - title: Drop a burn-in after each switch
+        md: Exclude the first minutes of each block from the analysis to limit carryover bias.
+      - title: Analyse at the block level
+        md: Blocks, not riders, are the units, so compute the confidence interval over blocks (or use cluster-robust errors). Rider-level standard errors would be far too small.
+  - type: callout
+    kind: prod
+    md: Many teams run both. A user-level A/B finds which variant users prefer (fast, high power, biased in magnitude), and a switchback measures the market-level effect before launch (slow, unbiased). Report the switchback number in the business case.
+  - type: related
+    slugs: [ab-testing, difference-in-differences, surge-pricing, cuped, queues]
+
+interview:
+  - level: mid
+    q: Why might a standard A/B test give the wrong answer for a ride-hailing pricing change?
+    answer: Interference (SUTVA violation). Treated and control riders share the same drivers, so if treatment increases demand, treated riders take rides that control riders would have got. The test measures the difference between groups, inflated by that transfer, not the effect of launching to everyone. When supply is constrained, the bias can be several-fold.
+    listen_for: [Interference or SUTVA, Shared supply, Overstated effect, Depends on supply constraint]
+  - level: senior
+    q: Design an experiment to measure the effect of a new delivery fee on orders and courier utilisation.
+    answer: A switchback by city and time block (e.g. 1–2 hours), randomised and stratified so each hour of the week gets both arms, with a burn-in after each switch and several weeks across many cities for power. Primary metrics are orders and completed deliveries per block; guardrails are delivery time, courier earnings and cancellations. Analyse at the block level with cluster-robust intervals and variance reduction from pre-period data. Optionally pair it with a user-level test to compare price sensitivity across segments.
+    listen_for: [Switchback with justified block length, Stratification and burn-in, Block-level analysis, Guardrail metrics on both sides]
