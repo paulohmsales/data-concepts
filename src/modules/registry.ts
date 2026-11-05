@@ -132,4 +132,25 @@ export const modules: ModuleEntry[] = [
     summary: 'pruning, the function that disables it, small files and the hot key that stalls a job.',
     Component: lazy(() => import('./partitioning/Partitioning.tsx')),
   },
+  {
+    slug: 'cohorts',
+    title: 'Cohorts and retention',
+    category: 'Data analysis',
+    summary: 'the retention triangle, active users that grow while retention falls, and the denominator trap.',
+    Component: lazy(() => import('./cohorts/Cohorts.tsx')),
+  },
+  {
+    slug: 'funnels',
+    title: 'Funnels',
+    category: 'Data analysis',
+    summary: 'order, windows and denominators: why two funnel dashboards disagree, and the 115% step.',
+    Component: lazy(() => import('./funnels/Funnels.tsx')),
+  },
+  {
+    slug: 'trend-seasonality',
+    title: 'Trend vs seasonality',
+    category: 'Data analysis',
+    summary: 'moving averages, YoY vs MoM, and comparing Monday with Sunday.',
+    Component: lazy(() => import('./seasonality/Seasonality.tsx')),
+  },
 ]
