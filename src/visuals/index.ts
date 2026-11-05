@@ -28,5 +28,8 @@ export const visuals: Record<string, ComponentType<VisualProps>> = {
   'de.ackLost': lazy(() => import('./de/AckLost.tsx')),
   'de.streamWindows': lazy(() => import('./de/StreamWindows.tsx')),
   'de.pruneCalendar': lazy(() => import('./de/PruneCalendar.tsx')),
+  'da.cohortLayers': lazy(() => import('./da/CohortLayers.tsx')),
+  'da.funnelPaths': lazy(() => import('./da/FunnelPaths.tsx')),
+  'da.decompose': lazy(() => import('./da/Decompose.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }

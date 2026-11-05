@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl, Toggle } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -120,28 +119,8 @@ export default function Cohorts() {
 
   return (
     <ModuleLayout
-      title="Cohorts and retention"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            “Weekly active users” mixes two very different things: how many people you <em>bring in</em>,
-            and how many <em>stay</em>. A growing marketing budget can lift the total for months while each
-            new group of users leaves faster than the last.
-          </p>
-          <p>
-            A <b>cohort</b> is a group that started at the same time (signed up in the same week). Follow
-            each cohort separately and line them up by <em>age</em> (weeks since signup), not by calendar
-            date. Each row of the triangle below is one cohort; each column is “how many were still
-            active k weeks later”. Read down a column to see whether newer cohorts retain better or
-            worse than older ones at the same age.
-          </p>
-          <p>
-            It’s a triangle because young cohorts haven’t lived long enough to have late columns. Those
-            cells are <em>unknown</em>, not zero.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <StatRow>
@@ -151,11 +130,6 @@ export default function Cohorts() {
             <Stat label="Active users this week" value={int(active[WEEKS - 1])} />
           </StatRow>
           <PlotFigure build={buildHeat} label="Cohort retention triangle" />
-          <p className="try">
-            The bottom-left is your newest cohort, with only a week of history. Move “users who stick” and watch
-            the right-hand columns flatten out at that level: that plateau, not week 1, decides whether
-            the product grows.
-          </p>
         </div>
       }
       breakIt={
@@ -185,28 +159,6 @@ export default function Cohorts() {
             measuring.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Why can weekly active users grow while retention gets worse?',
-              a: 'Active users = survivors of every past cohort. If acquisition grows fast enough, bigger new cohorts more than offset faster churn, for a while. The decline only shows when you split by cohort and compare at equal age.',
-            },
-            {
-              q: 'What is a cohort table, and how do you read it?',
-              a: 'Rows are cohorts (users grouped by start week), columns are age (weeks since start), cells are the share still active. Read across a row for one cohort’s decay, and down a column to compare cohorts at the same age.',
-            },
-            {
-              q: 'Why is the cohort table a triangle, and what mistake does that invite?',
-              a: 'Recent cohorts haven’t reached the later ages, so those cells don’t exist yet. Treating them as zero (or averaging across all users) biases retention down; pool only cohorts that have reached that age.',
-            },
-            {
-              q: 'Which part of a retention curve matters most for long-run growth?',
-              a: 'Where it flattens: the share of each cohort that stays for good. A curve that keeps decaying to zero means every user eventually leaves and growth depends entirely on acquisition.',
-            },
-          ]}
-        />
       }
     />
   )

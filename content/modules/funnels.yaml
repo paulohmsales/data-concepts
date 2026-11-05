@@ -24,3 +24,100 @@ check:
 - q: Top-of-funnel conversion dropped 30% overnight; every later step is flat. What do you check first?
   a: |-
     The denominator: a traffic change (bots, a new campaign bringing low-intent visitors, a tracking change double-firing page views). A real product problem would usually show in the steps below too.
+experiments:
+  - title: The window decides
+    goal: A one-hour window with many buyers who come back days later.
+    setup: {windowHours: 1, slowBuyers: 0.8}
+    look: Most purchases fall outside the window; cart → purchase looks terrible. Widen it to 30 days and the funnel recovers.
+    why: |
+      A conversion window is part of the metric’s definition. Too short and it measures speed, not conversion; it also makes the most recent days look worse, because their users haven’t had time yet.
+  - title: The 115% step
+    goal: Lots of guest checkouts (cart without a signup event).
+    setup: {guests: 0.7, r1: 0.3, r2: 0.9}
+    look: The naive funnel shows more carts than signups, a step above 100%. The ordered funnel drops the guests.
+    why: |
+      Naive counts treat each step independently, so a later step isn’t a subset of the earlier one. The strict funnel is consistent but silently excludes a whole flow. Decide explicitly whether guest checkout belongs.
+  - title: Bots at the top
+    goal: Add 30,000 bot visits.
+    setup: {bots: 30000}
+    look: Visit → signup collapses; every later step is unchanged.
+    why: |
+      When only the top of the funnel moves, suspect the traffic (bots, a campaign, a tracking change), not the product.
+  - title: Clean funnel
+    goal: No guests, no bots, a 30-day window.
+    setup: {guests: 0, bots: 0, windowHours: 720}
+    look: The overall conversion is close to the product of the true step rates.
+    why: |
+      With nested steps and a window covering nearly everyone, the ordered funnel recovers the true behaviour. Every deviation from these conditions is a definition choice to document.
+
+deep_dive:
+  - type: heading
+    text: Count journeys, not events
+  - type: stepper
+    key: da.funnelPaths
+    caption: Five users on a time axis. Filled circles are the steps the current funnel definition counts.
+    steps:
+      - title: Naive counts
+        md: "Count distinct users per event type: 3 signups, 3 carts, 3 purchases. Signup → cart looks like 100%, which is suspicious, because Carla never signed up."
+        state: {phase: 1}
+      - title: Require order
+        md: "A user counts at a step only after completing the previous one. Carla (guest) stops at visit. Now: 3 signups, 2 carts, 2 purchases."
+        state: {phase: 2}
+      - title: Add a conversion window
+        md: "Steps must happen within 72 hours of the first one. Davi’s purchase six days later no longer counts: 1 purchase."
+        state: {phase: 3}
+      - title: Exclude bots
+        md: The crawler leaves the denominator, so visit → signup rises from 60% to 75%. Same users, four different funnels, all defensible. The definition has to be written down.
+        state: {phase: 4}
+  - type: heading
+    text: The decisions inside a funnel
+  - type: table
+    columns:
+      - {key: d, label: Decision}
+      - {key: o, label: Options}
+      - {key: why, label: Why it matters}
+    rows:
+      - {d: Unit, o: "user, session, account, device", why: "Sessions inflate the top; accounts merge devices"}
+      - {d: Order, o: "strict sequence, any order, skips allowed", why: "Alternative flows (guest checkout, deep links) vanish under strict order"}
+      - {d: Window, o: "per step or from the first step; hours to weeks", why: "Short windows understate conversion and penalise recent days"}
+      - {d: Repeats, o: "first occurrence, any occurrence", why: "Users who loop (add, remove, add) count differently"}
+      - {d: Exclusions, o: "bots, internal users, test accounts", why: Changes the top of the funnel most}
+  - type: code
+    lang: sql
+    caption: An ordered funnel within 72 hours of the first visit (one row per user, then counts).
+    code: |
+      WITH firsts AS (
+        SELECT user_id,
+               min(ts) FILTER (WHERE step = 'visit') AS t_visit
+        FROM events GROUP BY user_id
+      ), steps AS (
+        SELECT f.user_id, f.t_visit,
+               min(e.ts) FILTER (WHERE e.step = 'signup' AND e.ts >= f.t_visit) AS t_signup
+        FROM firsts f JOIN events e USING (user_id) GROUP BY f.user_id, f.t_visit
+      ), carts AS (
+        SELECT s.*, min(e.ts) FILTER (WHERE e.step = 'cart' AND e.ts >= s.t_signup) AS t_cart
+        FROM steps s JOIN events e USING (user_id) GROUP BY ALL
+      )
+      SELECT count(t_visit) AS visits,
+             count(t_signup) FILTER (WHERE t_signup <= t_visit + INTERVAL 72 HOUR) AS signups,
+             count(t_cart)   FILTER (WHERE t_cart   <= t_visit + INTERVAL 72 HOUR) AS carts
+      FROM carts;
+  - type: callout
+    kind: prod
+    md: Most product analytics tools (Amplitude, Mixpanel) let you choose these settings per chart, which is why two teams’ funnels disagree. Standardise the definition for the funnels leadership watches, and show the settings on the chart.
+  - type: related
+    slugs: [cohorts, sample-ratio-mismatch, join-fanout]
+
+interview:
+  - level: mid
+    q: Signup → purchase conversion dropped 15% last week. How do you investigate?
+    answer: First check the definition and data (tracking changes, window too short for recent cohorts, bot traffic). Then localise by step (which step dropped), segment (platform, country, channel, new vs returning) and time (did it start at a release?). Compare with the mix of incoming traffic, and look at a stable reference step to separate data issues from behaviour.
+    listen_for: [Data and definition checks first, Localise by step, segment and time, Mix shifts, Release correlation]
+  - level: mid
+    q: Why do funnel numbers for the most recent days usually look worse, and what do you do about it?
+    answer: Their users haven’t had the full conversion window yet (right-censoring). Show only cohorts whose window has closed, mark recent ones as incomplete, or compare at equal elapsed time (conversion within 24 hours) instead of eventual conversion.
+    listen_for: [Censoring, Mature cohorts only or fixed elapsed time]
+  - level: senior
+    q: Two dashboards show different checkout conversion for the same week. How do you resolve it?
+    answer: Line up the definitions. Unit (user vs session), step order and allowed skips, conversion window and its start, deduplication, exclusions (bots, internal, test), time zone and event versus processing date, and identity stitching across devices. Reconcile on a small sample of users, then agree one documented definition (ideally in a semantic layer) and deprecate the other.
+    listen_for: [Systematic definition comparison, Sample-level reconciliation, Single governed definition]

@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -118,23 +117,8 @@ export default function Funnels() {
 
   return (
     <ModuleLayout
-      title="Funnels"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A funnel counts how many users make it through a sequence of steps: visit, sign up, add to
-            cart, buy. The drop between two steps is where the product loses people, so it is where to look.
-          </p>
-          <p>
-            Defining it takes more decisions than it seems. <b>Order</b>: does a user count at “cart” if
-            they never signed up, or did it before signing up? <b>Window</b>: if they buy three weeks after
-            their first visit, is that the same journey? <b>Who</b> is in the denominator: users, sessions,
-            bots? Each choice changes the numbers, and two dashboards that made different choices will
-            disagree.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>The funnel ({hours(deferred.windowHours)} window, steps in order)</h3>
@@ -149,10 +133,6 @@ export default function Funnels() {
             the curve flattens once the window covers almost everyone ({int(unlimited[3])} with no limit).
           </p>
           <PlotFigure build={buildWindows} label="Purchasers counted by conversion window" />
-          <p className="try">
-            Set the window to 1 hour, and “buyers who come back later” to 80%. Most purchases fall outside,
-            and cart → purchase looks like a disaster. Same users, different definition.
-          </p>
         </div>
       }
       breakIt={
@@ -184,28 +164,6 @@ export default function Funnels() {
             below it does, suspect the traffic, not the product.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What decisions define a funnel, beyond the list of steps?',
-              a: 'The unit (user, session, account), whether steps must happen in order, the conversion window (and whether it starts at the first step), whether repeated steps count, and which traffic is excluded (bots, internal users).',
-            },
-            {
-              q: 'Step conversion shows 115%. What happened?',
-              a: 'The later step isn’t a subset of the earlier one: users reach it without the earlier event (guest flows, deep links, missing tracking) and the funnel counts events independently rather than ordered journeys.',
-            },
-            {
-              q: 'Why does the conversion window matter, and how do you choose it?',
-              a: 'Purchases after the window aren’t counted, so a short window understates conversion, especially for considered purchases, and makes recent periods look worse (not enough time has passed). Choose from the observed time-to-convert distribution (e.g. the window covering 90–95% of conversions) and apply it consistently.',
-            },
-            {
-              q: 'Top-of-funnel conversion dropped 30% overnight; every later step is flat. What do you check first?',
-              a: 'The denominator: a traffic change (bots, a new campaign bringing low-intent visitors, a tracking change double-firing page views). A real product problem would usually show in the steps below too.',
-            },
-          ]}
-        />
       }
     />
   )

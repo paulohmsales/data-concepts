@@ -24,3 +24,85 @@ check:
 - q: Describe additive decomposition in a sentence.
   a: |-
     Write the series as trend + seasonal + remainder: estimate the trend with a moving average spanning whole cycles, estimate each season as the average deviation from trend at that point in the cycle, and what is left is the remainder.
+experiments:
+  - title: The right window
+    goal: Smooth the daily series with a 7-day average, then a 10-day one.
+    setup: {window: 7}
+    look: The 7-day line is smooth; at 10 days a weekly wiggle comes back (the ripple chart shows non-multiples of 7 leave residue).
+    why: |
+      A 7-day window always contains each weekday exactly once, so the weekly effects sum to zero. A 10-day window contains three weekdays twice, and which ones changes as it slides.
+  - title: Seasons without growth
+    goal: Remove the trend completely.
+    setup: {trendPerYear: 0}
+    look: Month-over-month still swings ±10% with the seasons; year-over-year flattens to about 0.
+    why: |
+      MoM compares two different points of the yearly cycle; YoY compares the same point a year apart, so the season cancels and only the trend (here, none) remains.
+  - title: Monday vs Sunday
+    goal: A strong weekend dip.
+    setup: {weekend: 400}
+    look: “This Monday vs yesterday” shows a huge jump; the 7-day comparison barely moves.
+    why: |
+      Day-over-day comparisons across the weekly cycle measure the weekday effect, not the business. Compare like with like: same weekday, or full weeks.
+  - title: Noise hides the signal
+    goal: Lots of day-to-day noise.
+    setup: {noise: 150}
+    look: Daily values look chaotic, while the weekly average and the YoY line are still clear.
+    why: |
+      Averaging n days divides the noise SD by about √n (the CLT again). Weekly totals carry about 2.6× less relative noise than single days.
+
+deep_dive:
+  - type: heading
+    text: Peeling the layers off
+  - type: stepper
+    key: da.decompose
+    caption: Two years of daily orders, taken apart one component at a time (classical additive decomposition).
+    steps:
+      - title: The raw series
+        md: Growth, a December peak, weekends and noise, all mixed. The orange line is a centred 365-day average, which removes both seasons and leaves the trend.
+        state: {phase: 1}
+      - title: Minus the trend
+        md: What remains swings around zero with the yearly season, plus a fast weekly zig-zag.
+        state: {phase: 2}
+      - title: Minus the yearly season
+        md: A 28-day centred average of the detrended series estimates the yearly cycle (28 = 4 whole weeks, so the weekly effect cancels in it). Subtract it and the weekly pattern dominates.
+        state: {phase: 3}
+      - title: Minus the weekly pattern
+        md: Subtract each weekday’s average effect. The remainder should look like noise. If it doesn’t, there’s structure left (holidays, a launch, an outage) worth explaining.
+        state: {phase: 4}
+  - type: formula
+    text: "value = trend + yearly season + weekly pattern + remainder        (multiplicative: value = trend × season × remainder; take logs to make it additive)"
+  - type: heading
+    text: Comparisons that respect the calendar
+  - type: table
+    columns:
+      - {key: c, label: Comparison}
+      - {key: good, label: Good for}
+      - {key: careful, label: Careful with}
+    rows:
+      - {c: Week over week (7-day totals), good: "Fast signal, removes the weekly cycle", careful: "Holidays and paydays inside one of the weeks"}
+      - {c: Year over year, good: "Removes the yearly season", careful: "Calendar shifts (Easter, Black Friday dates, leap years, weekday alignment); one-off events last year"}
+      - {c: Month over month, good: "Rarely the right choice for seasonal businesses", careful: "Different month lengths and weekday counts as well as seasons"}
+      - {c: "Seasonally adjusted series (STL, X-13)", good: "Continuous view of the underlying trend", careful: "Needs a few years of history; adjustments are revised as data arrives"}
+  - type: worked
+    title: Weekday-aligned year over year
+    md: |
+      Compare Monday 2 March 2026 with Monday 3 March 2025 (364 days earlier, the same weekday), not with 2 March 2025, which was a Sunday. A 365-day lag mixes the weekly cycle back in for businesses with strong weekends.
+  - type: callout
+    kind: prod
+    md: For metric alerts, compare against a seasonal baseline (same weekday last weeks, or a forecast with prediction intervals) rather than a fixed threshold or yesterday. Most “anomalies” on dashboards are Mondays, holidays and month-ends.
+  - type: related
+    slugs: [cohorts, late-data, clt]
+
+interview:
+  - level: junior
+    q: Sales in December are 30% higher than November. Is the business growing?
+    answer: Not necessarily. December is seasonally high for most retail. Compare December with last December (year over year), or look at a seasonally adjusted series or trailing 12-month totals.
+    listen_for: [Seasonality, YoY or seasonally adjusted comparison]
+  - level: mid
+    q: How would you build an alert for a daily metric that has a strong weekly pattern?
+    answer: Model the expected value per day from history (same weekday over recent weeks, or a forecast such as STL plus trend or Prophet-style models), and alert when the actual falls outside a prediction interval for several points or by a large margin. Handle holidays explicitly, and alert on 7-day totals if daily noise is high.
+    listen_for: [Seasonal baseline, Prediction intervals, Holidays, Noise vs signal trade-off]
+  - level: senior
+    q: Revenue is down 8% year over year this March. Walk through how you’d explain it.
+    answer: Check the calendar first (Easter or other holidays moving, fewer weekend days, leap year), then data completeness. Decompose into volume × price × mix, and new versus existing customers. Look at the trend across recent months on a seasonally adjusted basis to see whether March is a break or a continuation, and check whether last March had a one-off. Present the decomposition with the calendar effect separated.
+    listen_for: [Calendar effects, Data checks, Decomposition (volume, price, mix), Trend context, Base effects]

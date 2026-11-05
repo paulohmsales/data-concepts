@@ -27,3 +27,92 @@ check:
 - q: Which part of a retention curve matters most for long-run growth?
   a: |-
     Where it flattens: the share of each cohort that stays for good. A curve that keeps decaying to zero means every user eventually leaves and growth depends entirely on acquisition.
+experiments:
+  - title: Read down a column
+    goal: Compare cohorts at the same age.
+    setup: {}
+    look: In the triangle, the week-4 column is roughly the same colour all the way down. Retention is stable.
+    why: |
+      Reading down a column compares cohorts at equal age, which isolates changes in the product or the users acquired. Reading across a row is one cohort ageing.
+  - title: Growth that hides decline
+    goal: From week 9, new users stick around less than half as much.
+    setup: {worse: true}
+    look: Weekly active users keep rising, while the week-4 retention chart drops sharply at cohort 9.
+    why: |
+      Active users are the survivors of every cohort. Growing signups keep adding bigger new bands, so the total rises even though each new band shrinks faster. Only the cohort view separates acquisition from retention.
+  - title: Where the curve flattens
+    goal: Set the long-run stickiness to 10%, then 40%.
+    setup: {floor: 0.1}
+    look: The right-hand columns of the triangle settle at the floor you chose; week 1 barely moves.
+    why: |
+      The early drop is mostly about onboarding; the plateau is the share of users for whom the product became a habit. Long-run growth depends on the plateau, so that is the number to move.
+  - title: The denominator trap
+    goal: Fast-growing signups.
+    setup: {growth: 1.2}
+    look: The naive pooled curve plunges toward zero while the correct one flattens.
+    why: |
+      With fast growth, most users are in young cohorts that can’t have a week-10 value yet. Counting them as zeros instead of “unknown” makes long-run retention look terrible.
+
+deep_dive:
+  - type: heading
+    text: The layer cake
+  - type: visual
+    key: da.cohortLayers
+    caption: "Weekly active users stacked by signup cohort: each band is one week’s new users, shrinking as they age. Tick the box: newer bands shrink much faster, yet the top of the stack keeps climbing for weeks."
+  - type: markdown
+    md: |
+      A total like “weekly active users” is the sum of every cohort’s survivors. Two very different businesses can draw the same total line: one with strong retention and slow acquisition, one with leaky retention hidden behind accelerating spend. Cohort analysis exists to tell them apart.
+  - type: heading
+    text: Building a cohort table in SQL
+  - type: code
+    lang: sql
+    code: |
+      WITH firsts AS (
+        SELECT user_id, date_trunc('week', min(event_date)) AS cohort_week
+        FROM events GROUP BY user_id
+      ), activity AS (
+        SELECT DISTINCT e.user_id, f.cohort_week,
+               datediff('week', f.cohort_week, date_trunc('week', e.event_date)) AS age
+        FROM events e JOIN firsts f USING (user_id)
+      )
+      SELECT cohort_week, age,
+             count(*) AS active,
+             count(*) / max(count(*)) OVER (PARTITION BY cohort_week) AS retention  -- age 0 = cohort size
+      FROM activity
+      GROUP BY cohort_week, age
+      ORDER BY cohort_week, age;
+  - type: heading
+    text: Decisions that change the numbers
+  - type: table
+    columns:
+      - {key: choice, label: Choice}
+      - {key: options, label: Options}
+      - {key: effect, label: Effect}
+    rows:
+      - {choice: What “active” means, options: "any event, a key action, a purchase", effect: "The stricter the action, the lower and more meaningful the curve"}
+      - {choice: Classic vs rolling, options: "active *in* week k, or active in week k *or later*", effect: "Rolling (unbounded) retention never decreases between returns; classic shows the real pattern"}
+      - {choice: Cohort by, options: "signup date, first purchase, acquisition channel, plan", effect: Lets you compare channels and launches at equal age}
+      - {choice: Immature cohorts, options: "exclude, or mark as incomplete", effect: Never count “not yet” as churn}
+  - type: worked
+    title: Retention and lifetime value
+    md: |
+      If a cohort keeps 40% at week 1, 25% at week 4 and plateaus at 20%, and each active user brings $3 a week, the first year’s value per signup is roughly the area under the curve times $3: about 1 + 0.4 + 0.3 + 0.28 + 0.25 + 47 × 0.2 ≈ 11.6 active weeks, so about $35. Moving the plateau from 20% to 25% adds about 2.4 weeks, more than doubling week-1 retention would.
+  - type: callout
+    kind: prod
+    md: Put a cohort chart next to every growth chart. When a total moves, the first question is “acquisition or retention?”, and only cohorts answer it.
+  - type: related
+    slugs: [funnels, trend-seasonality, simpsons-paradox]
+
+interview:
+  - level: mid
+    q: How would you measure whether a product change improved retention?
+    answer: Ideally an A/B test with retention at a fixed horizon (e.g. week-4) as a metric. Without one, compare cohorts that signed up just before and just after the change at equal ages, controlling for acquisition mix (channel, country, season), and watch for novelty effects and seasonality. Report the full curves, not one number.
+    listen_for: [Experiment first, Cohorts at equal age, Mix and seasonality controls]
+  - level: mid
+    q: Write SQL for weekly retention by signup cohort.
+    answer: Find each user’s first week (min event date truncated to week), compute each activity week’s age in weeks since that, count distinct active users per cohort and age, and divide by the cohort size (age 0). Exclude ages a cohort hasn’t reached yet.
+    listen_for: [First-activity cohort, Age not calendar week, Distinct users, Cohort size as denominator]
+  - level: senior
+    q: DAU is up 20% year over year, but the CEO suspects retention is getting worse. How do you check and present it?
+    answer: Split growth into new versus returning users and plot cohort curves by signup month at equal age. Check whether newer cohorts plateau lower, and decompose DAU into contributions by cohort age (a layer-cake chart). Control for acquisition-channel mix. Present one chart that separates acquisition from retention, plus the expected DAU if acquisition stopped.
+    listen_for: [New vs returning, Cohort curves at equal age, Layer cake, Channel mix]

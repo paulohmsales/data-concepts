@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -158,24 +157,8 @@ export default function Seasonality() {
 
   return (
     <ModuleLayout
-      title="Trend vs seasonality"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            Most business metrics are several rhythms on top of each other: a slow <b>trend</b> (the
-            business growing), a <b>yearly season</b> (December peaks, summer lulls), a <b>weekly
-            pattern</b> (weekends differ), and day-to-day <b>noise</b>. The question people actually ask,
-            “are we growing?”, is about the trend alone. The other rhythms are in the way.
-          </p>
-          <p>
-            Two tools separate them. A <b>moving average</b> whose window is a whole number of cycles (7
-            days, 28 days) cancels that cycle exactly. And comparing a period with <b>the same period one
-            cycle earlier</b> (this Monday vs last Monday, this December vs last December) compares like
-            with like.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <PlotFigure build={buildSeries} label="Daily series with moving average and true trend" />
@@ -184,11 +167,6 @@ export default function Seasonality() {
             <PlotFigure build={buildTrend} label="Estimated versus true trend" />
             <PlotFigure build={buildWeekly} label="Estimated versus true weekly pattern" />
           </div>
-          <p className="try">
-            Set the window to 7, then 10. The 7-day line is smooth; the 10-day line wobbles every week.
-            Raise the yearly season and the 7-day line follows it, because a weekly average only removes the
-            weekly cycle. The 365-day average removes both, but it can’t see the first and last half-year.
-          </p>
         </div>
       }
       breakIt={
@@ -216,28 +194,6 @@ export default function Seasonality() {
           </p>
           <PlotFigure build={buildRipple} label="Weekly ripple left by each moving-average window" />
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'December revenue is up 25% on November. Is the business doing well?',
-              a: 'You can’t tell from that: December is seasonally high. Compare with December last year (YoY), or with a seasonally adjusted series, to separate trend from season.',
-            },
-            {
-              q: 'Why does a 7-day moving average remove the weekly pattern but a 10-day one doesn’t?',
-              a: 'A 7-day window always contains exactly one of each weekday, so the weekly effects sum to zero. A 10-day window contains some weekdays twice, and which ones changes as it slides, so a weekly wiggle remains.',
-            },
-            {
-              q: 'What are the downsides of year-over-year comparisons?',
-              a: 'They need a year of history, react slowly (a change shows up fully only after months), and can be distorted by calendar shifts (Easter, an extra weekend day, leap years) or by anything unusual last year (the base effect).',
-            },
-            {
-              q: 'Describe additive decomposition in a sentence.',
-              a: 'Write the series as trend + seasonal + remainder: estimate the trend with a moving average spanning whole cycles, estimate each season as the average deviation from trend at that point in the cycle, and what is left is the remainder.',
-            },
-          ]}
-        />
       }
     />
   )
