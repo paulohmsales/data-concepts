@@ -1,0 +1,100 @@
+slug: slos
+title: SLOs and error budgets for data
+track: data-leadership
+summary: turning "the data should be reliable" into a promise you can measure, choosing a deadline and target you can actually keep, and using the error budget to decide when to ship and when to fix.
+roles: [mgr, de, ae]
+lab: slos
+order: 1
+
+intuition: |
+  "The dashboard should always be up to date" isn't a promise anyone can keep or check. Reliability engineering replaces it with three precise things:
+
+  - An **SLI** (service level indicator) measures what users experience, e.g. “the daily revenue table was complete by the deadline today: yes or no”.
+  - An **SLO** (objective) is the target, such as “ready by 07:00 on 95% of days this quarter”.
+  - The **error budget** is what the SLO allows you to miss: 5% of 90 days is 4.5 days.
+
+  The budget is the useful part. While it lasts, the team ships changes freely, because some misses are expected and acceptable. When it's spent, reliability work comes first. That turns an argument about priorities into a number both sides agreed on in advance.
+
+  The lab runs a quarter of a daily pipeline that usually finishes around 06:00, with random variation, occasional late upstream data, and deploys that sometimes break the next run.
+
+experiments:
+  - title: A reasonable promise
+    goal: Ready by 07:00 on 95% of days, with 10 deploys a week.
+    setup: {}
+    look: The expected on-time rate is about 95%, so you meet the SLO in some quarters and miss in others (try a few seeds). The budget chart shows each miss eating a day.
+    why: |
+      The SLO sits right at the system's real performance, so it's a coin flip. Either improve the system (fewer breaking deploys, better upstream monitoring) or promise slightly less.
+  - title: Five nines for a daily table
+    goal: Set the target to 99.9%.
+    setup: {target: 0.999}
+    look: The budget is 0.09 days, so one late day in 90 breaches the SLO. Every seed fails.
+    why: |
+      Targets copied from web services make no sense for a daily product. With 90 measurements a quarter, the only meaningful targets are roughly 90%, 95%, 97% or 99% (0, 1, 3 or 9 misses allowed). Pick what users actually need.
+  - title: Promising too early
+    goal: Move the deadline to 06:20, close to the usual finish.
+    setup: {deadline: 380}
+    look: About 20% of days miss, from ordinary variation alone. The promise curve shows why.
+    why: |
+      The deadline must leave room for normal variation plus a typical incident fix. Read the promise curve: the earliest deadline at which the line reaches your target is the earliest honest promise.
+  - title: Ship faster
+    goal: 20 deploys a week, no policy.
+    setup: {deploysPerWeek: 20}
+    look: Misses roughly double (about 9% of days), and the SLO is breached in every seed.
+    why: |
+      Change is the biggest source of incidents. That isn't an argument against change, but the budget makes the trade-off explicit.
+  - title: The error budget policy
+    goal: Same 20 deploys a week, but freeze deploys when the budget runs out.
+    setup: {deploysPerWeek: 20, freeze: true}
+    look: The SLO is met most quarters, roughly half as many changes ship, and the green bands show the freeze.
+    why: |
+      A policy agreed in advance (when the budget is gone, only reliability fixes ship until it recovers) is what makes SLOs bite. Upstream incidents still happen during a freeze, so pair it with work on the causes: testing in CI, safer deploys, alerting on upstream freshness.
+
+deep_dive:
+  - type: heading
+    text: Choosing good SLIs for data
+  - type: table
+    columns:
+      - {key: sli, label: SLI}
+      - {key: measures, label: Measures}
+      - {key: example, label: Example SLO}
+    rows:
+      - {sli: Freshness, measures: "Time since the newest data, or ready-by-deadline", example: "Daily tables ready by 07:00 on 95% of days"}
+      - {sli: Completeness, measures: "Rows or partitions present vs expected (reconciled to source)", example: "≥ 99.5% of source orders present within 2 hours on 99% of days"}
+      - {sli: Correctness, measures: "Share of quality checks passing on published data", example: "No severity-1 test failures in published marts on 97% of days"}
+      - {sli: Availability, measures: "Queries or API calls that succeed", example: "99.5% of dashboard queries succeed (per month)"}
+      - {sli: Latency, measures: "Query or API response time", example: "p95 dashboard load under 3 s"}
+  - type: formula
+    text: "error budget = (1 − SLO) × number of measurements in the window        e.g. (1 − 0.95) × 90 days = 4.5 days"
+  - type: heading
+    text: Rolling it out
+  - type: steps
+    items:
+      - title: Start from what users need
+        md: Ask when the data is used (the 08:00 exec meeting, a 09:00 trading decision) and what happens when it's late. That sets the deadline. Don't set SLOs for data nobody depends on.
+      - title: Measure before promising
+        md: Record the SLI for a few weeks, then set the first SLO at or slightly below what you already achieve. Tighten later.
+      - title: Agree the policy with stakeholders
+        md: What happens when the budget is spent (freeze, a reliability sprint, an incident review), signed off by the product owner and engineering lead before the first breach.
+      - title: Publish status
+        md: A visible page showing each data product's SLI, budget remaining and current incidents. Most distrust in data comes from surprises.
+      - title: Review quarterly
+        md: Budgets never touched mean the SLO is too loose or the team is over-investing in reliability. Budgets always blown mean the SLO or the system needs to change.
+  - type: callout
+    kind: prod
+    md: "Alert on budget **burn rate**, not single misses. Burning a month's budget in a day pages someone; a slow burn opens a ticket. For daily products, also alert on leading indicators (the run hasn't started by 05:30, an upstream source is stale) so you hear before the deadline passes."
+  - type: related
+    slugs: [data-quality, orchestration, tail-latency, retries-idempotency]
+
+interview:
+  - level: mid
+    q: What's the difference between an SLI, an SLO and an SLA?
+    answer: An SLI is a measurement of user-visible behaviour (e.g. the share of days data was ready by 07:00). An SLO is an internal target for it (95% per quarter). An SLA is an external contract with consequences (refunds, penalties) and is usually looser than the SLO so you have warning before breaching it.
+    listen_for: [Measurement vs target vs contract, User-visible SLIs, SLA looser than SLO]
+  - level: senior
+    q: Stakeholders want “100% reliable data”. How do you respond?
+    answer: Explain that 100% is impossible and very expensive to approach, and that every extra nine costs feature work. Find out when and how the data is used and the real cost of lateness or errors, propose measurable SLIs and an achievable target based on current performance, agree an error budget policy, and publish status. Offer tiers, with stricter targets for the few critical products.
+    listen_for: [Reframes 100%, Ties to business use and cost, Measured baseline, Budget policy, Tiering]
+  - level: senior
+    q: Your team keeps blowing its error budget. What do you do as a manager?
+    answer: Apply the agreed policy (pause feature work for reliability), then find the causes from incidents (deploy-related, upstream, capacity) and fund fixes for the biggest one. That might be CI tests, staged rollouts, upstream contracts and freshness alerts, or capacity. Check the SLO is right, renegotiating with stakeholders if it is stricter than the need. Report progress in budget terms.
+    listen_for: [Uses the policy, Root causes by category, Invests in the top cause, Revisits the SLO honestly]

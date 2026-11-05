@@ -40,6 +40,7 @@ export const labs: Record<string, ComponentType> = {
   'dimensional-modeling': lazy(() => import('./dimensional-modeling/DimensionalModeling.tsx')),
   dbt: lazy(() => import('./dbt/Dbt.tsx')),
   'data-quality': lazy(() => import('./data-quality/DataQuality.tsx')),
+  slos: lazy(() => import('./slos/Slos.tsx')),
   lakehouse: lazy(() => import('./lakehouse/Lakehouse.tsx')),
   spark: lazy(() => import('./spark/Spark.tsx')),
   kafka: lazy(() => import('./kafka/Kafka.tsx')),
