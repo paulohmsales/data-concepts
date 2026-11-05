@@ -34,12 +34,19 @@ npm run build       # static output in dist/
 
 ## Deploy
 
-The app is static files. `deploy/Caddyfile` serves `dist/` with automatic HTTPS, single-page-app
-fallback and long-lived caching for fingerprinted assets (basic auth is one uncomment away).
+Live at <https://data-concepts.srv1294517.hstgr.cloud> (private: basic auth).
+
+The app is static files. On the VPS, the Traefik instance already running in Docker Swarm terminates
+HTTPS (Let's Encrypt) and checks basic auth. Behind it, a small Caddy container (`deploy/Dockerfile`,
+`deploy/Caddyfile`) serves `dist/` with a single-page-app fallback and long-lived caching for
+fingerprinted assets.
 
 ```sh
-DEPLOY_HOST=my-vps ./deploy/deploy.sh   # test, build, rsync dist/ to /srv/data-concepts
+./deploy/deploy.sh   # test, build, ship to jobz-vps, build the image there, roll out the stack
 ```
+
+The first run creates the login on the server (`/opt/data-concepts/.env`, a hash only) and prints the
+password once. To change it, delete that file and redeploy.
 
 ## Layout
 

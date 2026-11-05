@@ -1,16 +1,37 @@
 #!/usr/bin/env bash
-# Build locally and sync dist/ to the VPS.
-#   DEPLOY_HOST=my-vps ./deploy/deploy.sh            (an ssh host or alias)
-#   DEPLOY_PATH=/srv/data-concepts                     (optional, default shown)
+# Test and build locally, then build the image and roll out the stack on the VPS.
+#   ./deploy/deploy.sh
+#   DEPLOY_HOST=jobz-vps  DOMAIN=data-concepts.srv1294517.hstgr.cloud  (defaults shown)
+# The first run creates a basic-auth login on the server and prints the password once.
 set -euo pipefail
 
-: "${DEPLOY_HOST:?set DEPLOY_HOST to the VPS ssh host or alias}"
-DEPLOY_PATH="${DEPLOY_PATH:-/srv/data-concepts}"
+DEPLOY_HOST="${DEPLOY_HOST:-jobz-vps}"
+DOMAIN="${DOMAIN:-data-concepts.srv1294517.hstgr.cloud}"
+REMOTE=/opt/data-concepts
 
 cd "$(dirname "$0")/.."
 npm ci
 npm test
 npm run build
 
-rsync -az --delete dist/ "$DEPLOY_HOST:$DEPLOY_PATH/"
-echo "Deployed to $DEPLOY_HOST:$DEPLOY_PATH"
+TAG="$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo -dirty)"
+
+ssh "$DEPLOY_HOST" "mkdir -p $REMOTE/build"
+rsync -az --delete dist deploy "$DEPLOY_HOST:$REMOTE/build/"
+
+ssh "$DEPLOY_HOST" bash -s -- "$REMOTE" "$TAG" "$DOMAIN" <<'REMOTE_SCRIPT'
+set -euo pipefail
+REMOTE="$1" TAG="$2" DOMAIN="$3"
+cd "$REMOTE"
+if [ ! -f .env ]; then
+  pass="$(openssl rand -base64 18)"
+  printf "BASIC_AUTH_USERS='paulo:%s'\n" "$(openssl passwd -apr1 "$pass")" > .env
+  chmod 600 .env
+  echo ">>> Created login  user: paulo  password: $pass  (shown once; hash kept in $REMOTE/.env)"
+fi
+set -a; . ./.env; set +a
+docker build -q -t "data-concepts:$TAG" -f build/deploy/Dockerfile build
+IMAGE="data-concepts:$TAG" DOMAIN="$DOMAIN" docker stack deploy -c build/deploy/stack.yml data-concepts
+REMOTE_SCRIPT
+
+echo "Deployed data-concepts:$TAG → https://$DOMAIN"

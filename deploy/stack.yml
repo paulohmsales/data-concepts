@@ -1,0 +1,24 @@
+# Docker Swarm stack, routed by the Traefik already running on the VPS.
+#   IMAGE, DOMAIN and BASIC_AUTH_USERS come from the environment (deploy.sh sets them).
+#   BASIC_AUTH_USERS is htpasswd format, user:$apr1$..., stored only on the server.
+services:
+  web:
+    image: ${IMAGE}
+    networks: [network_swarm_public]
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+      labels:
+        traefik.enable: "true"
+        traefik.docker.network: network_swarm_public
+        traefik.http.routers.data-concepts.rule: Host(`${DOMAIN}`)
+        traefik.http.routers.data-concepts.entrypoints: websecure
+        traefik.http.routers.data-concepts.tls.certresolver: letsencryptresolver
+        traefik.http.routers.data-concepts.middlewares: data-concepts-auth
+        traefik.http.middlewares.data-concepts-auth.basicauth.users: ${BASIC_AUTH_USERS}
+        traefik.http.services.data-concepts.loadbalancer.server.port: "8080"
+
+networks:
+  network_swarm_public:
+    external: true

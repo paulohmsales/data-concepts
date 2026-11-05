@@ -10,7 +10,7 @@ statistics and machine learning, through visual explanations and sandboxes you c
 The goal is understanding: being able to explain a concept cold, without notes. Shipping features is secondary.
 
 - **Repo:** public on GitHub.
-- **App:** self-hosted on the VPS. Whether it's public or private is still open (see D9).
+- **App:** self-hosted on the VPS, private behind basic auth: <https://data-concepts.srv1294517.hstgr.cloud>.
 
 ## 2. Principles
 
@@ -139,8 +139,8 @@ source changed mid-run, and running the same job twice (idempotency).
 | M1 | Scaffold | App runs locally, one empty module route, tests run, CI runs tests on push | ✅ |
 | M2 | A/B core | Core functions written, acceptance tests pass | ✅ |
 | M3 | A/B UI | Views 1–5 built, all four template parts present | ✅ |
-| M4 | A/B polish | Explain-back answered, README with GIF, deployed to VPS | README + GIF ✅; deploy files ready (needs D9 + VPS); explain-back: yours |
-| M5 | Module 2 | Spec, then the same M2–M4 cycle | Spec, core, UI ✅; explain-back: yours |
+| M4 | A/B polish | Explain-back answered, README with GIF, deployed to VPS | README + GIF ✅; deployed ✅; explain-back: later (optional) |
+| M5 | Module 2 | Spec, then the same M2–M4 cycle | Spec, core, UI ✅; deployed ✅; explain-back: later (optional) |
 
 ## 8. Backlog of later modules
 
@@ -186,7 +186,8 @@ data-concepts/
 | D5 | Styling | Plain CSS modules | Less to learn that isn't data | 2026-11-04 ✅ |
 | D6 | Tests | Vitest | Native to Vite | 2026-11-04 ✅ |
 | D7 | Package manager | npm | Fewer surprises | 2026-11-04 ✅ |
-| D8 | Deploy | Caddy serving `dist/`, Docker optional | Automatic HTTPS | 2026-11-04 ✅ |
+| D8 | Deploy | Caddy container serving `dist/`, behind the VPS's existing Traefik (Docker Swarm) | Traefik already owns 80/443 and does HTTPS; Caddy just serves files | 2026-11-05 ✅ |
+| D9 | App visibility | Private: Traefik basic auth | Your call | 2026-11-05 ✅ |
 | D10 | Random seed | Seeded PRNG | Same seed reproduces the same simulation | 2026-11-04 ✅ |
 | – | CI | GitHub Actions: typecheck + tests on push/PR | Repo is on GitHub | 2026-11-04 ✅ |
 | – | Who writes the core | Claude writes all code; you review and answer the explain-back | Your call: focus on understanding, not implementation | 2026-11-04 ✅ |
