@@ -1,0 +1,106 @@
+slug: llm-cost
+title: LLM cost and latency
+track: ai-engineering
+summary: tokens in, tokens out, caching, batching and routing, and why long answers are slow.
+roles: [ai, swe, mgr]
+lab: llm-cost
+order: 5
+
+intuition: |
+  LLM APIs charge per **token**: roughly ¾ of an English word. You pay for every token you send (the system prompt, the chat history, the retrieved documents, the question) and, at a higher rate, for every token the model writes back.
+
+  Latency has two parts. **Time to first token** is the model reading your input (fast, but it grows with long prompts). **Generation time** is the model writing its answer one token at a time, at a fixed speed per model, so a 1,000-token answer takes ten times as long as a 100-token one.
+
+  Most of the savings come from four places: send less (trim context), reuse what you send (prompt caching), wait when you can (batch processing at a discount), and use a smaller model for the easy requests (routing). Prices in the lab are illustrative tiers; edit the defaults in your head to your provider’s current price list.
+
+experiments:
+  - title: The baseline
+    goal: A medium model, 10,000 requests a day, 3,000 input and 400 output tokens each.
+    setup: {}
+    look: About $4,500 a month; input is 60% of the bill even though output tokens cost five times more each.
+    why: |
+      Per request: 3,000 × $3/M + 400 × $15/M = $0.009 + $0.006 = $0.015. Input dominates because there is so much more of it. Long prompts are the usual cost driver.
+  - title: Cache the shared prefix
+    goal: 80% of every prompt (system prompt, instructions, fixed documents) is identical across requests and served from the prompt cache.
+    setup: {cacheHit: 0.8}
+    look: The bill drops to about $2,560, and time to first token shrinks.
+    why: |
+      Cached input costs a fraction of normal input (10% here) and skips most of the prefill work. Put stable content first and variable content (the user’s question) last so the prefix stays cacheable.
+  - title: Route easy requests to a small model
+    goal: Send 80% of requests to the small tier.
+    setup: {routedToSmall: 0.8}
+    look: About $1,200 a month, a quarter of the baseline.
+    why: |
+      Small models cost an order of magnitude less per token. If a classifier (or rules) can tell easy requests from hard ones, most traffic can go to the cheap model, with the large one reserved for what needs it. Evaluate quality per route before you trust it.
+  - title: RAG context bloat
+    goal: Stuff 30,000 tokens of retrieved context into every request.
+    setup: {inputTokens: 30000}
+    look: About $29,000 a month, more than six times the baseline, and time to first token rises.
+    why: |
+      Cost is linear in tokens. Retrieving more chunks “just in case” multiplies the bill and often hurts quality too (irrelevant context distracts). Retrieve fewer, better chunks (see the RAG module).
+  - title: Long answers are slow answers
+    goal: Ask for 2,000-token answers.
+    setup: {outputTokens: 2000}
+    look: About 29 seconds on the medium tier; the generation bar dwarfs time to first token.
+    why: |
+      Generation runs at a fixed tokens-per-second rate per model, so latency is roughly proportional to output length. Ask for concise answers, stream tokens to the user as they’re generated, and use structured output to avoid verbose prose.
+
+deep_dive:
+  - type: heading
+    text: Everything has to fit in the window
+  - type: stepper
+    key: ai.contextWindow
+    caption: A support chat with a 32k-token context window. The system prompt and retrieved documents are fixed; every turn adds history.
+    steps:
+      - title: First turn
+        md: Plenty of room. Each request still pays for the system prompt and documents every single time.
+        state: {turns: 1}
+      - title: Five turns in
+        md: History is now the biggest part of every request, so each new message costs more than the last.
+        state: {turns: 5}
+      - title: Nine turns in
+        md: The window is full. Something has to go, usually the oldest turns, so the model “forgets” what the user said at the start.
+        state: {turns: 9}
+      - title: Fifteen turns in
+        md: Most of the conversation is gone. Real systems summarise old turns into a short memory, or keep key facts in a structured state, instead of resending everything.
+        state: {turns: 15}
+  - type: heading
+    text: The cost formula
+  - type: formula
+    text: |
+      cost per request = input_tokens × price_in × (1 − cached + cached × cache_discount) + output_tokens × price_out
+      latency ≈ time_to_first_token(input, cache) + output_tokens / tokens_per_second
+  - type: heading
+    text: Levers, in the order to try them
+  - type: table
+    columns:
+      - {key: lever, label: Lever}
+      - {key: saves, label: Saves}
+      - {key: catch, label: Catch}
+    rows:
+      - {lever: Trim the prompt and context, saves: "Cost and latency, linearly", catch: "Check quality with evals; cut repeated instructions and unused examples first"}
+      - {lever: Prompt caching, saves: "Most of the cost of a long stable prefix; faster first token", catch: "Only exact prefix matches; cache entries expire after minutes"}
+      - {lever: Shorter outputs, saves: "Latency and the expensive output tokens", catch: "Set max tokens and ask for concise or structured answers"}
+      - {lever: Routing / cascades, saves: "Large factor on most traffic", catch: "Needs a reliable router and per-route evals"}
+      - {lever: Batch APIs, saves: "Around half the price", catch: "Results arrive minutes to hours later; for offline jobs only"}
+      - {lever: Semantic caching of answers, saves: "Repeated questions cost nothing", catch: "Stale or wrong reuse; key on normalised questions with care"}
+      - {lever: Fine-tune a small model, saves: "Large factor at high volume", catch: "Upfront effort; needs data and evals; re-train as needs change"}
+  - type: callout
+    kind: prod
+    md: Log tokens in and out, cache hits, latency and model per request, and attribute cost to features and customers. LLM costs scale with usage like cloud costs. Without per-feature visibility, the bill is a surprise. Set budgets and alerts, and stream responses so perceived latency is the time to first token.
+  - type: related
+    slugs: [rag, agents, llm-evals]
+
+interview:
+  - level: junior
+    q: What drives the cost of an LLM API call?
+    answer: The number of input tokens times the input price plus output tokens times the (higher) output price, multiplied by request volume. Long prompts with history and retrieved context often dominate; caching, batching and model choice change the prices.
+    listen_for: [Input vs output tokens, Volume, Prompt length as the usual driver]
+  - level: mid
+    q: Users complain the assistant is slow. Where do you look?
+    answer: Split latency into time to first token (prompt length, model size, queueing, retrieval and tool calls before the model runs) and generation time (output length divided by tokens per second). Fixes are streaming, shorter outputs, smaller or faster models, prompt caching, trimming context, running retrieval and tool calls in parallel, and caching frequent answers. Measure p50 and p95 per step.
+    listen_for: [TTFT vs generation, Output length, Streaming, Measure per step and percentiles]
+  - level: senior
+    q: An LLM feature’s monthly cost tripled after launch. How do you bring it down without hurting quality?
+    answer: Attribute cost first (per feature, route, customer; input vs output; which prompt parts). Then trim and cache stable prefixes, cap and shorten outputs, retrieve less but better context, route easy requests to a smaller model behind an eval gate, batch offline work, and cache repeated answers. Verify every change with the eval suite and watch quality metrics in production.
+    listen_for: [Attribution before optimisation, Ordered levers, Quality guarded by evals]

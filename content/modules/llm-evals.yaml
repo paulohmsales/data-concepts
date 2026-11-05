@@ -1,0 +1,121 @@
+slug: llm-evals
+title: LLM evals
+track: ai-engineering
+summary: how many examples you need, paired comparisons, and judges that prefer long answers and whatever comes first.
+roles: [ai, mle, ds]
+lab: llm-evals
+order: 3
+
+intuition: |
+  Changing a prompt, a model or a retrieval setting changes thousands of future answers, and you can’t read them all. An **eval** is a fixed set of representative inputs with a way to grade each output: exact checks where possible (valid JSON? correct number?), human ratings where needed, and increasingly an **LLM judge**, another model asked to grade.
+
+  Evals are measurements, so everything from the statistics modules applies. With 30 examples, a pass rate of 70% could really be anywhere from about 52% to 83%. Two prompts graded on the same examples should be compared item by item (paired), not as two separate averages. And an LLM judge is an instrument with its own errors: it tends to prefer longer answers and whichever answer it reads first, so it has to be checked against humans before you trust it.
+
+experiments:
+  - title: Fifty examples can’t see a 5-point gain
+    goal: B truly passes 5 points more often than A; evaluate on 50 items.
+    setup: {n: 50, passA: 0.7, passB: 0.75}
+    look: The intervals overlap almost completely and the verdict is “can’t tell”. Change the seed a few times; the observed gap even flips sign.
+    why: |
+      Each pass rate from 50 items has a margin of about ±13 points. A 5-point difference is buried in that noise. Drag the item count to 1,000 and the verdict becomes reliable.
+  - title: Pairing is free power
+    goal: The same comparison on 500 items.
+    setup: {n: 500, passA: 0.7, passB: 0.75}
+    look: The paired test usually detects the gap; note how few items actually disagree between A and B.
+    why: |
+      Easy items pass for both prompts and hard items fail for both; those carry no information about the difference. The paired (McNemar) test uses only the items where the prompts disagree, which removes the item-difficulty noise.
+  - title: A wordy prompt fools the judge
+    goal: Equal true quality, but B writes longer answers and the judge has a 15% verbosity bias.
+    setup: {n: 1000, passA: 0.7, passB: 0.7, verbosityBias: 0.15}
+    look: Humans see no difference; the LLM judge reports a significant win for B.
+    why: |
+      LLM judges systematically favour longer, more detailed-looking answers. Without a human-labelled check, a prompt change that only adds words looks like an improvement.
+  - title: Position bias, and the fix
+    goal: Pairwise comparisons where the judge favours the first answer shown (A always first).
+    setup: {passA: 0.7, passB: 0.7, positionBias: 0.2, swap: false, n: 1000}
+    look: The judge prefers B only about 30% of the time even though the prompts are equal. Turn on “ask twice, swapping the order”, and it returns to about 50%.
+    why: |
+      Judges (and people) favour the first or the last option. Asking in both orders and averaging cancels the bias; disagreements between the two orders are also a useful signal of low-confidence comparisons.
+  - title: A noisy judge
+    goal: Judge agreement with humans of 70%.
+    setup: {judgeAccuracy: 0.7, n: 500}
+    look: Cohen’s κ falls below 0.5. The judge’s pass rates drift toward 50% and differences shrink.
+    why: |
+      A judge that is often wrong adds noise and pulls every rate toward the middle (attenuation), so real improvements look smaller. Measure κ against a human-labelled sample before trusting a judge, and re-check it when you change the judge model or rubric.
+
+deep_dive:
+  - type: heading
+    text: The eval loop
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: data, label: Eval set, sub: "real inputs + references", col: 0, row: 0}
+        - {id: run, label: Run the system, sub: "prompt, model, RAG", col: 1, row: 0}
+        - {id: out, label: Outputs, col: 2, row: 0}
+        - {id: code, label: Code checks, sub: "schema, regex, exact", col: 1, row: 1}
+        - {id: judge, label: LLM judge, sub: "rubric, pairwise", col: 2, row: 1}
+        - {id: human, label: Human review, sub: "sample + calibrate", col: 3, row: 1}
+        - {id: metrics, label: Metrics + CIs, sub: "per slice", col: 3, row: 0}
+      edges:
+        - {from: data, to: run}
+        - {from: run, to: out}
+        - {from: out, to: code}
+        - {from: out, to: judge}
+        - {from: out, to: human}
+        - {from: code, to: metrics}
+        - {from: judge, to: metrics}
+        - {from: human, to: metrics}
+    steps:
+      - title: Start from real inputs
+        md: Collect inputs from production logs and from known failure cases, with a reference answer or a rubric for each. Tag them by type (topic, difficulty, language) so you can read results per slice.
+        state: {active: [data, run, out]}
+      - title: Cheapest graders first
+        md: Anything checkable by code (valid JSON, required fields, a number within tolerance, a citation that exists) should be checked by code. It’s free, fast and exact.
+        state: {active: [out, code, metrics]}
+      - title: LLM judges for the fuzzy parts
+        md: Helpfulness, faithfulness to the context, tone. Use a written rubric, ask for reasoning before the score, prefer pairwise comparisons for “which is better”, and swap positions.
+        state: {active: [out, judge, metrics]}
+      - title: Humans calibrate the judge
+        md: Label a random sample by hand, measure agreement (κ) with the judge, and re-check whenever the judge or rubric changes. Humans also read failures to find new categories to add to the set.
+        state: {active: [out, human, judge, metrics]}
+  - type: heading
+    text: How big an eval set?
+  - type: formula
+    text: "margin ≈ 1.96 · √(p(1 − p) / n)        p = 0.7: n = 50 → ±13 pts, n = 200 → ±6 pts, n = 1,000 → ±3 pts"
+  - type: markdown
+    md: |
+      To detect a difference between two prompts, what matters is the number of items where they disagree. Paired tests on the same items need far fewer examples than comparing two independent pass rates. Small eval sets are still useful for catching regressions in specific behaviours (a golden set of must-pass cases), but don’t read small differences in their averages as wins.
+  - type: heading
+    text: Kinds of graders
+  - type: table
+    columns:
+      - {key: g, label: Grader}
+      - {key: good, label: Good for}
+      - {key: watch, label: Watch out for}
+    rows:
+      - {g: Exact / code checks, good: "Formats, schemas, extraction, math, tool-call arguments", watch: "Brittle string matching on free text"}
+      - {g: Reference-based (similarity to a gold answer), good: "Short factual answers", watch: "Penalises correct answers phrased differently"}
+      - {g: LLM judge with a rubric, good: "Helpfulness, faithfulness, tone, instruction following", watch: "Verbosity and position bias, self-preference for its own model family, drift when the judge model changes"}
+      - {g: Pairwise LLM judge, good: "Comparing two versions; more stable than absolute scores", watch: "Must swap order; ties"}
+      - {g: Human review, good: "Ground truth, new failure modes, calibrating judges", watch: "Cost, inter-rater disagreement (measure it too)"}
+  - type: callout
+    kind: prod
+    md: Treat evals like tests in CI. Every prompt or model change runs the suite; regressions on must-pass cases block the change; aggregate scores are reported with intervals and per slice. Add every production incident to the eval set so it can’t happen twice.
+  - type: related
+    slugs: [rag, ab-testing, multiple-comparisons, confidence-intervals]
+
+interview:
+  - level: mid
+    q: How would you evaluate a customer-support chatbot built on an LLM?
+    answer: |
+      Build an eval set from real conversations (and known failures), tagged by intent and difficulty. Grade in layers: code checks (correct tool calls, policy-required phrases, no PII), an LLM judge with a rubric for correctness, helpfulness and faithfulness to the knowledge base, validated against human labels (κ), and human review of a sample. Report pass rates with intervals per slice, compare versions with paired tests, and run it in CI. Online: resolution rate, escalations, thumbs up/down, and A/B tests for bigger changes.
+    listen_for: [Real, sliced eval data, Layered graders, Judge validated against humans, Statistics (intervals, paired), Online metrics]
+  - level: mid
+    q: What are the known biases of LLM-as-judge and how do you mitigate them?
+    answer: Position bias (prefers the first or second answer), so swap orders and average. Verbosity bias (prefers longer answers), so use length-controlled rubrics, penalise unnecessary length and check correlation with length. Self-preference (favours outputs of its own model family), so use a different judge model or several. Inconsistency, so ask for reasoning before the score, use low temperature, and repeat. Always calibrate against a human-labelled sample.
+    listen_for: [Names position and verbosity bias, Concrete mitigations, Human calibration]
+  - level: senior
+    q: Your new prompt scores 78% vs 75% for the old one on 100 eval items. Ship it?
+    answer: Not on that evidence alone. With 100 items each rate has about ±8 points of margin. A paired test on the items where they disagree is the right analysis, and it probably isn’t significant. Look at which items flipped (are the new failures worse?), check per-slice results and must-pass cases, expand the set or run an online A/B test if the stakes justify it, and consider cost and latency differences too.
+    listen_for: [Recognises noise, Paired analysis, Inspects flipped items and slices, Next step to get evidence]

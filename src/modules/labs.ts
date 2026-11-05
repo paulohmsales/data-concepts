@@ -31,4 +31,7 @@ export const labs: Record<string, ComponentType> = {
   'class-imbalance': lazy(() => import('./class-imbalance/ClassImbalance.tsx')),
   rag: lazy(() => import('./rag/Rag.tsx')),
   embeddings: lazy(() => import('./embeddings/Embeddings.tsx')),
+  'llm-evals': lazy(() => import('./llm-evals/LlmEvals.tsx')),
+  agents: lazy(() => import('./agents/Agents.tsx')),
+  'llm-cost': lazy(() => import('./llm-cost/LlmCost.tsx')),
 }
