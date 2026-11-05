@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl, Toggle } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -94,24 +93,8 @@ export default function Leakage() {
 
   return (
     <ModuleLayout
-      title="Train/test leakage"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A test set is a rehearsal for the future: data the model has never seen. <b>Leakage</b> is any way
-            information from that “future” sneaks into training, so the rehearsal is rigged. The score looks
-            great; production doesn’t.
-          </p>
-          <p>
-            The obvious leak is training on test rows. The common ones are subtler: choosing features,
-            scaling, imputing or tuning on the <em>whole</em> dataset before splitting; random splits of
-            data where time matters; the same customer in both train and test; and features that are only known{' '}
-            <em>because</em> of the outcome (a “refund issued” flag when predicting fraud). The rule: anything
-            learned from data must be learned inside the training fold only.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>
@@ -155,28 +138,6 @@ export default function Leakage() {
             </li>
           </ul>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What is data leakage, in one sentence?',
-              a: 'Information that wouldn’t be available at prediction time (from the test set, the future, or the label itself) influencing the model or its evaluation, so the measured performance is better than real performance.',
-            },
-            {
-              q: 'Why does feature selection before the train/test split leak, even if the model never trains on test rows?',
-              a: 'Choosing features by their correlation with the label on all rows uses the test labels. With many candidate features, you pick ones that happen to fit those test labels, so the test score is optimistic. Selection (and scaling, imputation, tuning) must be fit inside each training fold, e.g. with a pipeline.',
-            },
-            {
-              q: 'You predict churn next month. Why is a random train/test split risky, and what do you use instead?',
-              a: 'Random splits put future rows in training and past rows in test, letting the model learn from information that comes after the prediction point (and from trends). Use a time-based split: train on earlier periods, test on later ones, with features computed only from data before each prediction date.',
-            },
-            {
-              q: 'A model gets 99% AUC on the first try. What do you check?',
-              a: 'Leakage first: features that encode the label or come after the outcome, IDs or timestamps that correlate with the label, duplicates of the same entity across train and test, and preprocessing done before the split. Look at feature importances: one dominant feature is a classic sign.',
-            },
-          ]}
-        />
       }
     />
   )

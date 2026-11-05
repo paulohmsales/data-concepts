@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Choice, ResetButton, SeedControl } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -47,7 +46,6 @@ export default function BiasVariance() {
   const stale = deferred !== c
   const set = <K extends keyof Controls>(k: K) => (v: Controls[K]) => setC((s) => ({ ...s, [k]: v }))
   const here = sim.curve[deferred.degree]
-  const best = sim.curve.reduce((a, b) => (b.test < a.test ? b : a))
 
   const buildFit = useCallback(
     (width: number, t: VizTheme): Plot.PlotOptions => {
@@ -115,7 +113,6 @@ export default function BiasVariance() {
     [sim.curve, deferred.degree],
   )
 
-  const preset = (p: Partial<Controls>) => setC((s) => ({ ...s, ...p }))
 
   const panel = (
     <>
@@ -140,25 +137,8 @@ export default function BiasVariance() {
 
   return (
     <ModuleLayout
-      title="Bias vs variance"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A model learns from one sample of data, but you care about how it does on the next one. Its
-            errors on new data come from three places. <b>Bias</b>: the model is too simple to follow the real
-            pattern, so it is wrong in the same way whatever sample it saw. <b>Variance</b>: the model is so
-            flexible that it follows the noise in its particular sample, so a different sample would give a
-            very different model. And <b>noise</b>: randomness no model can predict.
-          </p>
-          <p>
-            More flexibility trades bias for variance. Training error always falls as the model gets
-            more complex, because it can memorise. Test error falls, bottoms out, then rises. The
-            sweet spot moves with the data: more points or a penalty on wild models (regularisation)
-            let you afford more complexity.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <PlotFigure build={buildFit} label="Training data, true function, fitted polynomial and refits" />
@@ -169,21 +149,10 @@ export default function BiasVariance() {
             <Stat label="Variance" value={f3(here.variance)} note="how much fits disagree" />
           </StatRow>
           <PlotFigure build={buildErrors} label="Training and test error by polynomial degree" />
-          <p className="try">
-            Degree 0–1 is a stiff line that misses the curve every time (the grey refits agree with each other
-            and are all wrong: bias). Degree 10+ chases every point (refits disagree wildly: variance). The
-            lowest test error here is at degree {best.degree}.
-          </p>
         </div>
       }
       breakIt={
         <div className={stale ? styles.stale : undefined}>
-          <div className={styles.buttons}>
-            <button type="button" onClick={() => preset({ degree: 12, n: 13, lambda: '0' })}>✗ Memorise: degree 12 on 13 points</button>
-            <button type="button" onClick={() => preset({ degree: 12, n: 300, lambda: '0' })}>Fix with data: 300 points</button>
-            <button type="button" onClick={() => preset({ degree: 12, n: 13, lambda: '0.1' })}>Fix with ridge λ = 0.1</button>
-            <button type="button" onClick={() => preset({ degree: 1, n: 300, lambda: '0' })}>✗ Underfit: a line on 300 points</button>
-          </div>
           <PlotFigure build={buildDecomp} label="Bias squared and variance by degree" />
           <ul>
             <li>
@@ -201,28 +170,6 @@ export default function BiasVariance() {
             </li>
           </ul>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Define bias and variance in terms of “training on many different samples”.',
-              a: 'Train the same model on many independent samples. Bias is how far the average of those models is from the truth; variance is how much the individual models scatter around their average. Expected test error = bias² + variance + irreducible noise.',
-            },
-            {
-              q: 'Why does training error keep falling with complexity while test error eventually rises?',
-              a: 'Extra flexibility can always fit the training points more closely, including their noise. That noise doesn’t repeat in new data, so beyond some point the extra fit is variance, and test error goes up.',
-            },
-            {
-              q: 'Your model has low training error and high validation error. What are three things to try?',
-              a: 'It’s overfitting (high variance): get more data, regularise (ridge/lasso, dropout, early stopping, smaller trees), or reduce complexity (fewer features or parameters). Bagging and averaging models also reduce variance.',
-            },
-            {
-              q: 'Both errors are high and close together. What does that suggest?',
-              a: 'High bias (underfitting): the model can’t represent the pattern. More data won’t help much; use a more flexible model or better features.',
-            },
-          ]}
-        />
       }
     />
   )

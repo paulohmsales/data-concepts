@@ -24,3 +24,79 @@ check:
 - q: When is resampling still useful?
   a: |-
     When the learner struggles to learn the minority class at all (e.g. some tree methods with very few positives), or to speed up training by undersampling the majority. Then correct or recalibrate the probabilities afterwards and pick the threshold on realistic data.
+experiments:
+  - title: The 98%-accurate useless model
+    goal: Positives are 2%; compare “always say no” with the plain model at 0.5.
+    setup: {prevalence: 0.02, threshold: 0.5}
+    look: Both are about 98% accurate; “always no” catches 0, the plain model only a handful.
+    why: |
+      Accuracy is dominated by the majority class. A model that never says yes already scores 1 − prevalence.
+  - title: Lower the threshold instead
+    goal: Keep the honest model, flag anything above 15%.
+    setup: {threshold: 0.15}
+    look: Recall jumps several-fold; precision drops but stays usable.
+    why: |
+      A calibrated model rarely says “50% fraud” when fraud is 2%, so 0.5 is the wrong cut-off. Moving the threshold trades precision for recall without retraining.
+  - title: What reweighting does to probabilities
+    goal: Compare the plain and class-weighted models on the calibration chart.
+    setup: {prevalence: 0.02}
+    look: The weighted model’s average prediction is about 25% when the real rate is 2%. The corrected curve lands back on the diagonal.
+    why: |
+      Weighting positives by w multiplies the model’s odds by w. Rankings barely change, but anything that reads the output as a probability is now wrong by that factor, unless you undo it.
+  - title: Rarer still
+    goal: Positives at 0.5%.
+    setup: {prevalence: 0.005}
+    look: “Always no” reaches 99.5% accuracy; with the same separation, precision at any useful recall gets low.
+    why: |
+      With rare positives, even a good model flags many negatives for each true positive. The fix is better features (more separation) or a two-stage process (cheap model, then a human or a costlier model), not resampling.
+
+deep_dive:
+  - type: heading
+    text: Accuracy is the wrong scoreboard
+  - type: visual
+    key: ml.iconArray
+    props: {prevalence: 0.02, threshold: 2.5, separation: 2}
+    caption: "1,000 transactions, 2% fraud. Start with a high threshold: accuracy looks great and almost every fraud is missed (red). Lower the threshold to catch the red squares, and watch the orange false alarms appear."
+  - type: heading
+    text: Remedies, and what each really does
+  - type: table
+    columns:
+      - {key: r, label: Remedy}
+      - {key: does, label: What it does}
+      - {key: cost, label: Side effect}
+    rows:
+      - {r: Lower the threshold, does: "Flags more cases from the same scores", cost: "None to the model; choose it from costs"}
+      - {r: Class weights, does: "Makes errors on positives count more in training", cost: "Inflates predicted probabilities by the weight"}
+      - {r: Oversampling (incl. SMOTE), does: "Repeats or synthesises positives", cost: "Same probability shift; overfitting to repeated points; SMOTE can create unrealistic samples"}
+      - {r: Undersampling, does: "Drops negatives", cost: "Throws data away; probabilities shift; faster training"}
+      - {r: Better features, does: "Separates the classes", cost: "Effort, the only thing that raises the whole curve"}
+  - type: formula
+    text: "p_corrected = p / (p + (1 − p)·w)        w = weight given to positives (or the oversampling factor)"
+    caption: Undo the odds shift from weighting or resampling, so outputs are probabilities again.
+  - type: heading
+    text: Metrics that see the minority
+  - type: markdown
+    md: |
+      - **Precision–recall curve and PR-AUC**: focus on the positive class; the baseline is the prevalence, not 0.5.
+      - **Recall at fixed precision** (or precision at fixed recall), matched to how the output is used.
+      - **Expected cost** using the real error costs.
+      - **Calibration** (reliability curve, Brier score) whenever someone will read the output as a probability.
+  - type: callout
+    kind: prod
+    md: Evaluate on data with the real-world class ratio, even if you rebalanced for training, and stratify the split so rare positives appear in every fold. With very few positives, the evaluation itself is noisy, so report intervals.
+  - type: related
+    slugs: [roc-thresholds, bias-variance, leakage]
+
+interview:
+  - level: junior
+    q: Why is accuracy a poor metric for fraud detection?
+    answer: Fraud is rare, so predicting “not fraud” for everything already gives very high accuracy while catching nothing. Use recall, precision, PR-AUC or the expected cost of errors.
+    listen_for: [Majority class dominates, Better metrics named]
+  - level: mid
+    q: Should you oversample the minority class?
+    answer: It can help some learners find the minority pattern, but it doesn’t add information and it shifts predicted probabilities upward. Often adjusting the decision threshold on a model trained on the natural distribution gives the same recall with calibrated outputs. If you resample, do it only inside training folds, evaluate on the real distribution, and correct or recalibrate the probabilities.
+    listen_for: [Not a free win, Threshold alternative, Only in training folds, Probability correction]
+  - level: senior
+    q: A churn model trained with class weights outputs 40% average churn probability; the real rate is 5%. The marketing team uses the scores to forecast churners. What do you do?
+    answer: The weighting inflated the odds by the weight factor (here about 19 = 0.95/0.05). Correct the outputs with p/(p + (1−p)·w) or recalibrate on a holdout with the real distribution (Platt or isotonic), verify with a reliability plot, and make sure forecasts sum calibrated probabilities. Keep using the scores for ranking if that’s all targeting needs.
+    listen_for: [Recognises the odds shift, Correction or recalibration, Reliability check, Ranking vs probability use]

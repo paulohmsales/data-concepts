@@ -24,3 +24,79 @@ check:
 - q: What does momentum do?
   a: |-
     It accumulates a velocity: each update is the gradient step plus a fraction β of the previous update. Oscillating components cancel and consistent ones add up, which speeds progress along shallow, consistent directions and damps zig-zags.
+experiments:
+  - title: Step too big
+    goal: Learning rate just above the stability limit on a bowl with κ = 10.
+    setup: {surface: bowl, kappa: 10, lr: 0.21, momentum: 0, steps: 30, start1: -2, start2: 4}
+    look: The path zig-zags further out each step and the loss shoots up; status “diverged”.
+    why: |
+      Along the steep direction (curvature 10), each step multiplies the distance to the minimum by 1 − 0.21 × 10 = −1.1. Bigger than 1 in size, so every step overshoots further than the last. The limit is lr < 2/curvature = 0.2.
+  - title: The narrow valley
+    goal: A stretched bowl (κ = 50) with the largest safe step.
+    setup: {surface: bowl, kappa: 50, lr: 0.038, momentum: 0, steps: 150, start1: -2, start2: 4}
+    look: Fast zig-zag across the valley, then a slow crawl along it; still not at the star after 150 steps.
+    why: |
+      The steep direction caps the step at 2/50, but along the shallow direction (curvature 1) such a step shrinks the distance only by 4% per step. Unscaled features create exactly this shape.
+  - title: Add momentum
+    goal: The same valley with momentum 0.8.
+    setup: {surface: bowl, kappa: 50, lr: 0.038, momentum: 0.8, steps: 150, start1: -2, start2: 4}
+    look: The path curves straight down the valley and converges in a fraction of the steps.
+    why: |
+      Momentum accumulates velocity: the oscillating components cancel step to step, the consistent one (along the valley) adds up.
+  - title: Scale the features
+    goal: A round bowl (κ = 1).
+    setup: {surface: bowl, kappa: 1, lr: 0.9, momentum: 0, steps: 30, start1: -2, start2: 4}
+    look: Almost straight to the minimum in a handful of steps.
+    why: |
+      Standardising features makes the curvatures similar, so one learning rate suits every direction.
+  - title: The wrong valley
+    goal: Start on the right of a surface with two minima.
+    setup: {surface: valleys, lr: 0.05, momentum: 0, steps: 120, start1: 1.6, start2: 1.2}
+    look: It settles in the right-hand valley, the shallower one. The star (global minimum) is on the left.
+    why: |
+      Gradient descent only knows “downhill from here”, so where you start decides which minimum you reach. Random restarts, noise (SGD) and good initialisation are the usual remedies.
+
+deep_dive:
+  - type: heading
+    text: One dimension first
+  - type: visual
+    key: ml.lrBall
+    props: {lr: 0.3}
+    caption: "f(w) = w²/2. The gradient is w, so a step is w ← w − lr·w = (1 − lr)·w. Try 0.3 (smooth), 1.0 (one step), 1.6 (overshooting but converging), 2.1 (diverging)."
+  - type: markdown
+    md: |
+      Everything in the 2-D lab follows from this. Near any minimum a loss looks like a bowl with some curvature c per direction, and a step multiplies the distance in that direction by (1 − lr·c). It converges only if |1 − lr·c| < 1, so **lr < 2 / c_max**: the steepest direction sets the learning rate for all of them.
+  - type: formula
+    text: "w ← w − η ∇L(w)            momentum:  v ← β v − η ∇L(w),  w ← w + v"
+  - type: heading
+    text: Beyond plain gradient descent
+  - type: table
+    columns:
+      - {key: m, label: Method}
+      - {key: idea, label: Idea}
+      - {key: when, label: Why people use it}
+    rows:
+      - {m: Stochastic / mini-batch GD, idea: "Gradient from a random batch instead of all data", when: "Cheap steps on big data; the noise also helps escape poor minima and saddle points"}
+      - {m: Momentum / Nesterov, idea: "Accumulate velocity", when: "Narrow valleys, faster convergence"}
+      - {m: "Adam (and AdamW)", idea: "Per-parameter step sizes from running averages of gradients and their squares", when: "Default for deep learning; robust to scaling"}
+      - {m: Learning-rate schedules, idea: "Warm-up, then decay (cosine, step)", when: "Large steps early for progress, small steps late for precision"}
+      - {m: Newton / L-BFGS, idea: "Use curvature to rescale the step", when: "Small to medium smooth problems (logistic regression solvers)"}
+  - type: callout
+    kind: prod
+    md: "Debugging training: loss goes to NaN in the first steps → learning rate too high (or bad inputs); loss decreases then plateaus high → too low, poorly scaled features or underfitting; loss oscillates → too high or batch too small. A learning-rate range test (increase lr each batch and plot loss) finds a good value quickly."
+  - type: related
+    slugs: [bias-variance, class-imbalance]
+
+interview:
+  - level: junior
+    q: What does the learning rate control, and what happens if it is too large or too small?
+    answer: The size of each step against the gradient. Too small and training is slow and may stall on plateaus; too large and steps overshoot the minimum, oscillating or diverging (loss blowing up to NaN).
+    listen_for: [Step size, Slow vs divergent, Practical symptom]
+  - level: mid
+    q: Why does feature scaling matter for gradient-based models?
+    answer: Features on very different scales make the loss surface elongated, so the learning rate must be small enough for the steep direction and progress along the shallow one becomes very slow (zig-zagging). Standardising makes curvatures comparable, allowing larger effective steps and faster, more stable convergence. Tree models don’t care, which is a useful contrast.
+    listen_for: [Condition number or elongated valley, lr limited by steepest direction, Trees are scale-invariant]
+  - level: senior
+    q: Explain Adam to someone who knows SGD.
+    answer: Adam keeps exponential moving averages of each parameter’s gradient (momentum, first moment) and squared gradient (second moment), corrects their start-up bias, and steps by the first moment divided by the square root of the second. Parameters with consistently large gradients get smaller steps and rare or small gradients get larger ones, an automatic per-parameter scaling. AdamW decouples weight decay from that scaling, which generalises better.
+    listen_for: [First and second moments, Per-parameter adaptive steps, Bias correction, AdamW vs L2]

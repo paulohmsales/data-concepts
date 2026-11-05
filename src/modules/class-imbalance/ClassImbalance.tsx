@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -133,24 +132,8 @@ export default function ClassImbalance() {
 
   return (
     <ModuleLayout
-      title="Class imbalance"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            Fraud, churn next week, a rare disease: the thing you want to find is maybe 1–2% of cases. A model
-            that always says “no” is 98% accurate and catches nothing. So accuracy is the wrong scoreboard;
-            use recall, precision and cost.
-          </p>
-          <p>
-            A well-trained model on imbalanced data isn’t broken. It correctly says that even suspicious
-            cases are <em>probably</em> negative, so few probabilities cross 0.5. The usual remedies
-            (oversampling, undersampling, class weights) push those probabilities up so that 0.5 flags more cases.
-            That works for ranking, but the probabilities are now wrong: a “50%” no longer means half of
-            those cases are positive. Often the simpler fix is to keep the honest probabilities and <b>lower the threshold</b>.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <PlotFigure build={buildHist} label="Feature distribution per class, log scale" />
@@ -166,11 +149,6 @@ export default function ClassImbalance() {
             ]}
           />
           <PlotFigure build={buildProb} label="Predicted probability by feature value for each model" />
-          <p className="try">
-            The plain model (blue) follows the true probability closely, which is good, but rarely reaches 0.5,
-            so at the default threshold it flags almost nothing. Lower its threshold to about 0.1 and recall jumps,
-            no resampling needed. The weighted model (orange) gets there by inflating every probability.
-          </p>
         </div>
       }
       breakIt={
@@ -193,28 +171,6 @@ export default function ClassImbalance() {
             that factor. Either undo it with the correction, or skip rebalancing and choose the threshold.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Why is accuracy misleading on imbalanced data?',
-              a: 'It is dominated by the majority class: predicting “negative” always scores 1 − prevalence while catching nothing. Use recall, precision, PR-AUC, or the expected cost of errors.',
-            },
-            {
-              q: 'Your fraud model never predicts fraud at threshold 0.5. Is the model broken?',
-              a: 'Not necessarily. With 1% fraud, even risky-looking transactions may truly be only 10–30% likely to be fraud, so a calibrated model rarely exceeds 0.5. Lower the threshold based on costs or capacity, rather than retraining.',
-            },
-            {
-              q: 'What do oversampling and class weights do to predicted probabilities?',
-              a: 'They make positives look more common during training, shifting the model’s odds up by the weight factor. Rankings barely change, but probabilities become inflated and miscalibrated. Correct with p′ = p / (p + (1 − p)·w), or recalibrate on data with the real class mix.',
-            },
-            {
-              q: 'When is resampling still useful?',
-              a: 'When the learner struggles to learn the minority class at all (e.g. some tree methods with very few positives), or to speed up training by undersampling the majority. Then correct or recalibrate the probabilities afterwards and pick the threshold on realistic data.',
-            },
-          ]}
-        />
       }
     />
   )

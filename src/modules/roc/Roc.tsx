@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -106,24 +105,8 @@ export default function Roc() {
 
   return (
     <ModuleLayout
-      title="ROC curves and thresholds"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A classifier doesn’t say yes or no. It gives a <b>score</b>, and you choose a <b>threshold</b> above which
-            you act (block the payment, call the customer). Positives and negatives produce overlapping
-            score distributions, so every threshold trades two mistakes: lower it and you catch more
-            positives but raise more false alarms; raise it and the reverse.
-          </p>
-          <p>
-            The <b>ROC curve</b> traces that trade for every threshold: true positive rate against false
-            positive rate. Its area (AUC) is the chance a random positive scores above a random negative,
-            a property of the <em>model</em>. The threshold is a <em>business</em> decision: it depends
-            on what each kind of mistake costs and on how rare positives are.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <PlotFigure build={buildHist} label="Score distributions for positives and negatives with the threshold" />
@@ -156,10 +139,6 @@ export default function Roc() {
               { key: 'p', label: 'let through', align: 'right', render: (r) => int(r.passed) },
             ]}
           />
-          <p className="try">
-            Drag the threshold. The orange dot slides along the ROC curve, which itself never moves. Then change the separation:
-            that reshapes the curve. Separation 0 is the diagonal (AUC 0.5): a coin flip.
-          </p>
         </div>
       }
       breakIt={
@@ -191,28 +170,6 @@ export default function Roc() {
             catch more positives. Choose the threshold from costs, not from a default of 0.5.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What does an AUC of 0.8 mean?',
-              a: 'If you pick one random positive and one random negative, the model scores the positive higher 80% of the time. It summarises ranking quality across all thresholds; it says nothing about which threshold to use or about precision at a given prevalence.',
-            },
-            {
-              q: 'Why is precision so much worse on rare positives even though the ROC curve is the same?',
-              a: 'TPR and FPR are rates within each class, so they don’t depend on the class mix. Precision = TP / (TP + FP), and FP = FPR × (number of negatives). With very many negatives, even a small FPR produces more false alarms than there are true positives.',
-            },
-            {
-              q: 'How do you choose a threshold?',
-              a: 'From the decision it drives: minimise expected cost (costFP·FP + costFN·FN), or meet a constraint (e.g. at least 90% recall, or at most 100 alerts a day for the team that reviews them), evaluated on validation data with the real prevalence.',
-            },
-            {
-              q: 'What is the difference between the ROC curve and the precision–recall curve, and when do you prefer the second?',
-              a: 'ROC plots TPR vs FPR; PR plots precision vs recall. PR depends on prevalence and focuses on the positive class, so it is more informative when positives are rare and false alarms are what hurt.',
-            },
-          ]}
-        />
       }
     />
   )

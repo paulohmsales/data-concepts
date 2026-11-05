@@ -24,3 +24,78 @@ check:
 - q: Both errors are high and close together. What does that suggest?
   a: |-
     High bias (underfitting): the model can’t represent the pattern. More data won’t help much; use a more flexible model or better features.
+experiments:
+  - title: Memorise the training set
+    goal: A degree-12 polynomial on 13 points.
+    setup: {degree: 12, n: 13, lambda: "0"}
+    look: The curve passes through every point (training error ≈ 0); test error is enormous and the grey refits fly everywhere.
+    why: |
+      With as many parameters as points the model can fit anything, including the noise, which won’t repeat in new data. Judged on its training data, an overfit model always looks perfect.
+  - title: Fix it with data
+    goal: The same degree-12 model, 300 points.
+    setup: {degree: 12, n: 300, lambda: "0"}
+    look: The refits settle down around the truth; test error approaches the noise floor.
+    why: |
+      More data shrinks variance: each fit sees more of the true pattern and the noise averages out. The flexible model becomes safe once the data can pin it down.
+  - title: Fix it with a penalty
+    goal: Degree 12 on 13 points, ridge λ = 0.1.
+    setup: {degree: 12, n: 13, lambda: "0.1"}
+    look: Much tamer curves and a far lower test error, with no new data.
+    why: |
+      Ridge adds λ·Σβ² to the loss, so large coefficients (the wild wiggles) are expensive. Variance falls a lot for a small increase in bias.
+  - title: Underfit, even with plenty of data
+    goal: A straight line on 300 points.
+    setup: {degree: 1, n: 300, lambda: "0"}
+    look: The refits agree with each other and are all wrong in the same way; train and test error are both high and close together.
+    why: |
+      This is bias: the model family can’t represent a sine. More data doesn’t help, only more flexibility (or better features) does.
+
+deep_dive:
+  - type: heading
+    text: Bias and variance, as darts
+  - type: visual
+    key: ml.dartboard
+    caption: Each dart is the same kind of model trained on a different sample; the bullseye is the truth. Bias is how far the cloud’s centre is from the bullseye; variance is how spread out the cloud is.
+  - type: formula
+    text: "E[(y − f̂(x))²] = bias² + variance + σ²        bias = E[f̂(x)] − f(x),  variance = E[(f̂(x) − E[f̂(x)])²]"
+    caption: The expected squared error on new data splits into three parts. σ² is the irreducible noise. The lab’s “noise floor” line is exactly σ².
+  - type: markdown
+    md: |
+      The expectation is over **training sets**. Imagine retraining on many fresh samples (the grey curves in the lab): their average is off by the bias, and their scatter is the variance. You can’t usually retrain on fresh samples, but cross-validation and the bootstrap approximate it.
+  - type: heading
+    text: The levers
+  - type: table
+    columns:
+      - {key: lever, label: Lever}
+      - {key: bias, label: Bias}
+      - {key: var, label: Variance}
+      - {key: ex, label: Examples}
+    rows:
+      - {lever: More flexible model, bias: ↓, var: ↑, ex: "higher degree, deeper trees, more features, bigger networks"}
+      - {lever: More training data, bias: "—", var: ↓, ex: "collect more, augment"}
+      - {lever: Regularisation, bias: ↑ a little, var: ↓, ex: "ridge/lasso, dropout, early stopping, max depth, min leaf size"}
+      - {lever: Averaging models, bias: "—", var: ↓, ex: "bagging, random forests, ensembles"}
+      - {lever: Boosting, bias: ↓, var: "↑ (control with learning rate, depth)", ex: "gradient-boosted trees"}
+  - type: callout
+    kind: note
+    title: Double descent
+    md: Very large models (modern neural networks, heavily over-parameterised regressions) can see test error rise near the interpolation point and then fall again as size keeps growing. The classical U-curve describes the regime most tabular models live in; implicit regularisation explains the rest.
+  - type: callout
+    kind: prod
+    md: "Diagnose with learning curves: plot training and validation error against training-set size. A large gap that closes with more data means variance (get data, regularise); both errors high and flat means bias (better features or a more flexible model)."
+  - type: related
+    slugs: [leakage, gradient-descent, bootstrap]
+
+interview:
+  - level: junior
+    q: Explain overfitting and how you detect it.
+    answer: The model learns noise specific to the training data, so it does well on training data and poorly on new data. Detect it with a held-out validation set or cross-validation, a large gap between training and validation error, and learning curves.
+    listen_for: [Noise vs signal, Train/validation gap, Held-out evaluation]
+  - level: mid
+    q: Your model has 98% training accuracy and 71% validation accuracy. What do you try, in what order?
+    answer: That’s high variance. Check for leakage or a validation set from a different distribution first. Then add regularisation (stronger L2, dropout, shallower trees, larger min leaf), reduce features, gather more data or augment it, and use ensembling/bagging. Track learning curves to see which helps.
+    listen_for: [Rules out data issues first, Regularisation and simplification, More data, Learning curves]
+  - level: senior
+    q: Why do random forests reduce variance compared with a single deep tree?
+    answer: Each tree is low-bias, high-variance. Averaging B trees divides the variance by up to B if they’re independent; bootstrap samples and random feature subsets decorrelate them, so the average’s variance drops a lot while bias stays about the same as one tree. Remaining variance is ρσ² + (1−ρ)σ²/B, limited by the correlation ρ between trees.
+    listen_for: [Averaging reduces variance, Decorrelation via bootstrap and feature subsampling, The ρσ² floor]

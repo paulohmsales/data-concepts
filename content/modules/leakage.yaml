@@ -25,3 +25,91 @@ check:
 - q: A model gets 99% AUC on the first try. What do you check?
   a: |-
     Leakage first: features that encode the label or come after the outcome, IDs or timestamps that correlate with the label, duplicates of the same entity across train and test, and preprocessing done before the split. Look at feature importances: one dominant feature is a classic sign.
+experiments:
+  - title: Ninety per cent on noise
+    goal: 60 rows, 1,000 random features, select the top 20 using all rows, then cross-validate.
+    setup: {n: 60, p: 1000, k: 20, informative: 0, targetLeak: false}
+    look: The leaky CV accuracy is around 90%; proper CV and brand-new data sit at a coin flip.
+    why: |
+      With 1,000 random features, some correlate with a 60-row label by chance. Choosing them on all rows lets the test folds’ labels pick the features, so they look predictive in every fold.
+  - title: Fewer candidates, smaller leak
+    goal: Only 20 candidate features.
+    setup: {p: 20, k: 20}
+    look: The gap between leaky and proper shrinks; with k = p there’s no selection, so no leak.
+    why: |
+      The leak comes from choosing among many candidates using test labels. With few candidates there are few lucky ones to pick; with no selection step nothing leaks.
+  - title: Real signal survives
+    goal: Ten informative features among the noise, with more rows.
+    setup: {n: 200, p: 200, informative: 10, k: 10}
+    look: Proper CV and brand-new data agree, well above 50%; the leaky number is still inflated.
+    why: |
+      Doing selection inside each fold doesn’t lose real signal; it just stops counting luck as signal.
+  - title: The column that is the answer
+    goal: Add a feature computed from the label.
+    setup: {targetLeak: true, p: 200, k: 20}
+    look: Both CV numbers jump towards 100%. On new data, where that column isn’t known at prediction time, accuracy falls back.
+    why: |
+      No split strategy catches target leakage, because the leaked column is there in every split. Only asking “would I know this when I make the prediction?” does.
+
+deep_dive:
+  - type: heading
+    text: Where the test labels sneak in
+  - type: stepper
+    key: ml.cvFolds
+    caption: Five folds of 12 rows; one is the current test fold.
+    steps:
+      - title: The data, split
+        md: Cross-validation holds each fold out in turn and trains on the rest. The held-out fold has to stay unseen until scoring.
+        state: {phase: 1}
+      - title: Leaky selection
+        md: Feature selection run once on all rows looks at the test fold’s labels (red outline). The features it picks are partly chosen *because* they fit those labels.
+        state: {phase: 2}
+      - title: Proper selection
+        md: Selection runs inside each split, on the training folds only, so the test fold is unseen by every step that learns from data. In scikit-learn, put selection, scaling and imputation inside a Pipeline and cross-validate the pipeline.
+        state: {phase: 3}
+  - type: heading
+    text: A catalogue of leaks
+  - type: table
+    columns:
+      - {key: leak, label: Leak}
+      - {key: ex, label: Example}
+      - {key: fix, label: Fix}
+    rows:
+      - {leak: Preprocessing on all data, ex: "Scaling, imputing, PCA, target encoding or feature selection fit before splitting", fix: "Fit inside each training fold (pipelines)"}
+      - {leak: Target leakage, ex: "“refund_issued” for fraud, “discharge_date” for readmission, post-outcome aggregates", fix: "Feature audit: available at prediction time?"}
+      - {leak: Temporal leakage, ex: "Random split on time-ordered data; features using future rows (rolling windows centred, not trailing)", fix: "Time-based split; features computed only from the past of each prediction point"}
+      - {leak: Group leakage, ex: "The same customer, patient or device in train and test", fix: "Group k-fold by entity"}
+      - {leak: Duplicates, ex: "Near-identical rows (re-scraped records, augmented copies) across the split", fix: "Deduplicate before splitting"}
+      - {leak: Tuning on the test set, ex: "Choosing hyperparameters or models by test-set score, repeatedly", fix: "Separate validation set or nested CV; touch the test set once"}
+  - type: code
+    lang: python
+    caption: The safe pattern. Every learned step is inside the pipeline, so cross-validation refits it per fold.
+    code: |
+      from sklearn.pipeline import make_pipeline
+      from sklearn.feature_selection import SelectKBest, f_classif
+      from sklearn.preprocessing import StandardScaler
+      from sklearn.linear_model import LogisticRegression
+      from sklearn.model_selection import GroupKFold, cross_val_score
+
+      model = make_pipeline(StandardScaler(), SelectKBest(f_classif, k=20), LogisticRegression())
+      scores = cross_val_score(model, X, y, cv=GroupKFold(5), groups=customer_id)
+  - type: callout
+    kind: warn
+    title: The symptom
+    md: Suspiciously good results on the first try (AUC 0.99), a single feature dominating importance, or a model that collapses in production. Treat great offline numbers as a bug report until you’ve ruled out leakage.
+  - type: related
+    slugs: [bias-variance, roc-thresholds, multiple-comparisons]
+
+interview:
+  - level: mid
+    q: What is data leakage? Give three examples.
+    answer: Information unavailable at prediction time influencing training or evaluation, so offline performance overstates real performance. Examples include fitting a scaler or feature selection on the full dataset before splitting, a feature derived from the target (a refund flag when predicting fraud), and random splits of time-series data so the model trains on the future.
+    listen_for: [Prediction-time availability, Preprocessing leak, Target leak, Temporal or group leak]
+  - level: mid
+    q: You’re predicting next-month churn. How do you split the data?
+    answer: By time. Pick prediction dates; build features only from data before each date; label with churn in the month after; train on earlier dates and validate on later ones (rolling or expanding windows). Also group by customer if customers appear at multiple dates, so the same customer isn’t in both sets for the same period.
+    listen_for: [Time-based split, Point-in-time features, Group awareness]
+  - level: senior
+    q: A model scored 0.95 AUC offline and 0.70 in production. How do you investigate?
+    answer: Check leakage first (features unavailable or computed differently at serving time, target-derived columns, future information in feature windows), then training/serving skew (different code paths, missing values handled differently, stale features), distribution shift between the training period and now, and label definition differences. Compare feature distributions offline versus online on the same entities, and replay production inputs through the offline pipeline.
+    listen_for: [Leakage audit, Training/serving skew, Drift, Side-by-side feature comparison]

@@ -26,3 +26,82 @@ check:
     What is the difference between the ROC curve and the precision–recall curve, and when do you prefer the second?
   a: |-
     ROC plots TPR vs FPR; PR plots precision vs recall. PR depends on prevalence and focuses on the positive class, so it is more informative when positives are rare and false alarms are what hurt.
+experiments:
+  - title: Slide along the curve
+    goal: Move the threshold from low to high.
+    setup: {threshold: 0}
+    look: The orange dot moves along the ROC curve; the curve itself never changes. Drag the threshold to 2.5.
+    why: |
+      The ROC curve is every threshold at once; picking a threshold picks a point on it. The model decides the curve, and you decide the point.
+  - title: A useless model
+    goal: Separation 0.
+    setup: {separation: 0}
+    look: The ROC curve is the diagonal and AUC is about 0.5.
+    why: |
+      If positives and negatives score the same, every threshold flags them at the same rate, so TPR = FPR.
+  - title: Rare positives
+    goal: The same model where positives are 1%.
+    setup: {prevalence: 0.01}
+    look: ROC and AUC unchanged; precision collapses (most flags are false alarms).
+    why: |
+      FPR applies to the huge negative class. 10% of 9,900 negatives is 990 false alarms against at most 100 true positives.
+  - title: Expensive misses
+    goal: A missed positive costs $100, a false alarm $1.
+    setup: {costFN: 100, costFP: 1}
+    look: The cheapest threshold (★) moves far down the curve, with high recall and many false alarms, and is very different from the most-accurate threshold.
+    why: |
+      The cost-minimising threshold balances the marginal costs. With misses 100× more expensive, you accept many false alarms to catch nearly every positive.
+
+deep_dive:
+  - type: heading
+    text: One thousand people
+  - type: visual
+    key: ml.iconArray
+    props: {prevalence: 0.1, threshold: 1, separation: 2}
+    caption: "Every square is a person. Blue: positives the model caught; red: positives it missed; orange: negatives it flagged anyway; grey: correctly ignored. Lower the share of positives and watch the orange outnumber the blue, while recall stays put."
+  - type: heading
+    text: The confusion matrix and its rates
+  - type: table
+    columns:
+      - {key: m, label: Metric}
+      - {key: f, label: Formula}
+      - {key: q, label: Question it answers}
+    rows:
+      - {m: "Recall (TPR, sensitivity)", f: "TP / (TP + FN)", q: "Of the real positives, how many did we catch?"}
+      - {m: False positive rate, f: "FP / (FP + TN)", q: "Of the negatives, how many did we flag?"}
+      - {m: Precision (PPV), f: "TP / (TP + FP)", q: "Of the flags, how many are real?"}
+      - {m: Specificity, f: "TN / (TN + FP) = 1 − FPR", q: "Of the negatives, how many did we leave alone?"}
+      - {m: F1, f: "2·P·R / (P + R)", q: "A single balance of precision and recall (ignores TN)"}
+  - type: formula
+    text: "precision = TPR·π / (TPR·π + FPR·(1 − π))        π = prevalence"
+    caption: Bayes’ rule. TPR and FPR are properties of the model; precision also depends on π, so it changes when the population does.
+  - type: heading
+    text: Choosing the threshold
+  - type: steps
+    items:
+      - title: From costs
+        md: "Minimise costFP·FP + costFN·FN. For calibrated probabilities the optimum is p > costFP / (costFP + costFN): with misses 5× as costly, flag anything above 1/6 ≈ 17%."
+      - title: From capacity
+        md: The review team can handle 200 cases a day, so flag the top 200 scores. A fixed budget turns the threshold into a rank cut-off.
+      - title: From a constraint
+        md: “Recall at least 95%” (medical screening) or “precision at least 90%” (auto-blocking payments). Choose the threshold on validation data with the real prevalence.
+  - type: callout
+    kind: warn
+    title: AUC is not the business metric
+    md: AUC averages over thresholds you’ll never use. Two models with equal AUC can differ a lot in the region you operate in (e.g. FPR below 1%). Compare models at the operating point, or with partial AUC or precision at k.
+  - type: related
+    slugs: [class-imbalance, leakage, bias-variance]
+
+interview:
+  - level: mid
+    q: What does an AUC of 0.85 mean?
+    answer: Pick a random positive and a random negative; the model scores the positive higher 85% of the time. It measures ranking quality across all thresholds, independent of prevalence, but says nothing about which threshold to use or what precision you’ll get.
+    listen_for: [Ranking probability interpretation, Threshold-free, Prevalence-independent but not precision]
+  - level: mid
+    q: How would you choose the decision threshold for a fraud model?
+    answer: From the business costs and constraints. Estimate the cost of a missed fraud (loss) and of a false alarm (review time, customer friction, lost sales), then minimise expected cost on validation data with the real fraud rate. Respect the review capacity (top-k), and revisit as fraud rates and costs change. Check calibration if using probability cut-offs.
+    listen_for: [Cost-based, Capacity constraint, Real prevalence, Recalibration over time]
+  - level: senior
+    q: Your model’s precision dropped from 60% to 25% after launching in a new market, but recall and AUC are unchanged. What happened?
+    answer: The base rate is lower in the new market. With the same TPR and FPR, precision falls as prevalence falls, because false positives scale with the much larger negative class. It’s expected from Bayes’ rule, not necessarily model decay. Raise the threshold for that market (or recalibrate per market) and set expectations with precision computed at the local prevalence.
+    listen_for: [Prevalence effect via Bayes, Not model decay, Per-segment thresholds or calibration]

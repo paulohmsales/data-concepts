@@ -31,5 +31,9 @@ export const visuals: Record<string, ComponentType<VisualProps>> = {
   'da.cohortLayers': lazy(() => import('./da/CohortLayers.tsx')),
   'da.funnelPaths': lazy(() => import('./da/FunnelPaths.tsx')),
   'da.decompose': lazy(() => import('./da/Decompose.tsx')),
+  'ml.dartboard': lazy(() => import('./ml/Dartboard.tsx')),
+  'ml.cvFolds': lazy(() => import('./ml/CvFolds.tsx')),
+  'ml.lrBall': lazy(() => import('./ml/LrBall.tsx')),
+  'ml.iconArray': lazy(() => import('./ml/IconArray.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }
