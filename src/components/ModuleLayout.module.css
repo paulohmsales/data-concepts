@@ -1,0 +1,12 @@
+.toc {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+  font-size: 0.9rem;
+}
+
+.part {
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border);
+}
