@@ -63,6 +63,27 @@ export const modules: ModuleEntry[] = [
     Component: lazy(() => import('./ab-testing/AbTesting.tsx')),
   },
   {
+    slug: 'multiple-comparisons',
+    title: 'Multiple comparisons',
+    category: 'Experimentation',
+    summary: 'test 20 things and something wins: Bonferroni, Holm and false discovery rates.',
+    Component: lazy(() => import('./multiple-comparisons/MultipleComparisons.tsx')),
+  },
+  {
+    slug: 'sample-ratio-mismatch',
+    title: 'Sample ratio mismatch',
+    category: 'Experimentation',
+    summary: 'when arm sizes are off, the result is broken: the chi-square check and the leaky variant.',
+    Component: lazy(() => import('./srm/Srm.tsx')),
+  },
+  {
+    slug: 'cuped',
+    title: 'CUPED',
+    category: 'Experimentation',
+    summary: 'pre-period data as free traffic, and the covariate that eats your effect.',
+    Component: lazy(() => import('./cuped/Cuped.tsx')),
+  },
+  {
     slug: 'snapshots',
     title: 'Snapshots and incremental loads',
     category: 'Data engineering',
