@@ -1,0 +1,136 @@
+slug: lakehouse
+title: Lakehouse tables (Delta, Iceberg)
+track: data-engineering
+summary: tables made of files plus a transaction log; the small-files problem, compaction, copy-on-write vs merge-on-read updates, and what time travel costs in storage.
+roles: [de, ae]
+lab: lakehouse
+order: 8
+
+intuition: |
+  A **lakehouse table** (Delta Lake, Apache Iceberg, Apache Hudi) is a folder of Parquet files in object storage plus a **transaction log** that says which files make up the table right now. Every write is a commit that adds and removes files atomically. Readers see either all of a commit or none of it, and old commits stay readable, which is **time travel**.
+
+  Files are immutable, and that one fact explains the whole lab:
+
+  - Each commit adds new files. Commit every minute and you get thousands of tiny files, and every query pays to open each one. **Compaction** rewrites small files into big ones.
+  - Changing a row means writing something new: either rewrite the whole file it lives in (**copy-on-write**) or write a small file listing deleted rows that readers must merge (**merge-on-read**).
+  - Replaced files aren't deleted immediately, so time travel and in-flight readers keep working. **Vacuum** (Delta) or **expire snapshots** (Iceberg) removes them after a retention period.
+
+experiments:
+  - title: The healthy table
+    goal: One commit per hour, 1 GB each, append-only, for a week.
+    setup: {}
+    look: 168 files of 1 GB, and a full scan takes about 90 s.
+    why: |
+      Big files keep per-file overhead (listing, opening, reading footers, scheduling a task) small compared with the time spent reading data.
+  - title: The small-files problem
+    goal: Commit every minute instead (streaming micro-batches).
+    setup: {appendsPerHour: 60}
+    look: 10,080 files of 17 MB, and the same scan takes about 290 s, more than three times as long for the same data.
+    why: |
+      Most of the scan is now file overhead. Small files come from frequent commits, over-partitioning (a partition per hour per country), and many writers in parallel.
+  - title: Compaction
+    goal: Keep minute commits, compact hourly.
+    setup: {appendsPerHour: 60, compaction: hourly}
+    look: Back to about 170 files and 90 s. Write amplification is 2× (every byte is written once by the stream and once by compaction).
+    why: |
+      Compaction (Delta OPTIMIZE, Iceberg rewrite_data_files, or automatic optimised writes) trades extra writes for faster reads. Run it on recent partitions, where small files accumulate, not on the whole table.
+  - title: Updates everywhere, copy-on-write
+    goal: Four update batches a day, each changing 1% of rows scattered across the whole table.
+    setup: {updatesPerDay: 4, updatePattern: scattered, writeMode: cow}
+    look: Write amplification about 13×, and storage about 2.5 TB for a 168 GB table.
+    why: |
+      Changing 1% of the rows in a file means rewriting the whole file, and scattered updates touch every file. Each old copy is kept for 7 days of time travel. This is what a naive MERGE on an unclustered key does.
+  - title: Clustered updates
+    goal: Same updates, but they only hit recent data.
+    setup: {updatesPerDay: 4, updatePattern: clustered, writeMode: cow}
+    look: Write amplification drops to about 1.4×.
+    why: |
+      If updates are mostly to recent rows (late events, order status changes), cluster or partition the table so they touch few files. Layout matters more than settings.
+  - title: Merge-on-read
+    goal: Scattered updates written as delete files.
+    setup: {updatesPerDay: 4, updatePattern: scattered, writeMode: mor}
+    look: Write amplification about 1×, but by the end of the week there are about 2,300 delete files and a full scan takes over 200 s.
+    why: |
+      Merge-on-read (Iceberg v2 delete files, Delta deletion vectors) makes writes cheap and pushes the work to readers, who merge deletes on every query. Add daily compaction to fold them back in.
+  - title: The cost of time travel
+    goal: Scattered copy-on-write updates with only 1 day of retention.
+    setup: {updatesPerDay: 4, updatePattern: scattered, writeMode: cow, retentionDays: 1}
+    look: Storage drops from about 2.5 TB to under 800 GB. At 0 days it's just the table.
+    why: |
+      Retention is a business decision. How far back do you need to query or restore, and how long do your longest queries and streaming readers run? Vacuuming below that breaks them. Delta's default is 7 days.
+
+deep_dive:
+  - type: heading
+    text: How the transaction log works
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: w, label: Writer, sub: "writes Parquet files first", col: 0, row: 0}
+        - {id: files, label: Data files, sub: "s3://…/table/part-*.parquet", col: 1, row: 0}
+        - {id: log, label: Transaction log, sub: "_delta_log/ or Iceberg metadata", col: 1, row: 1}
+        - {id: cat, label: Catalog, sub: "Unity, Glue, Polaris, REST", col: 2, row: 1}
+        - {id: r, label: Reader, sub: "plans from the log, not by listing", col: 2, row: 0}
+      edges:
+        - {from: w, to: files}
+        - {from: w, to: log}
+        - {from: log, to: cat}
+        - {from: cat, to: r}
+        - {from: r, to: files}
+    steps:
+      - title: Write files, then commit
+        md: The writer uploads new Parquet files (invisible to readers so far), then commits a log entry listing files added and removed. The commit is atomic, using conditional writes so two writers can't both create version 42.
+        state: {active: [w, files, log]}
+      - title: Optimistic concurrency
+        md: If another writer committed first, the loser checks for conflicts (did they touch the same files?), then retries on top of the new version or fails. Appends rarely conflict; concurrent MERGEs into the same partition do.
+        state: {active: [w, log], bad: [w]}
+      - title: Readers plan from metadata
+        md: A reader asks the catalog for the current version, reads the log (or Iceberg manifests) to get the exact file list with per-file min/max column stats, and skips files that can't match the filter, without listing millions of objects.
+        state: {active: [cat, r, log]}
+      - title: Old versions remain until vacuumed
+        md: "Removed files are only marked removed. `SELECT … VERSION AS OF 41` still works, until vacuum or snapshot expiry deletes files older than the retention window."
+        state: {active: [log, files, r]}
+  - type: heading
+    text: Delta vs Iceberg vs Hudi
+  - type: table
+    columns:
+      - {key: f, label: Topic}
+      - {key: delta, label: Delta Lake}
+      - {key: iceberg, label: Apache Iceberg}
+      - {key: hudi, label: Apache Hudi}
+    rows:
+      - {f: Metadata, delta: "JSON log + Parquet checkpoints", iceberg: "Metadata file → manifest lists → manifests", hudi: "Timeline of instants"}
+      - {f: Partitioning, delta: "Hive-style columns; liquid clustering instead", iceberg: "Hidden partitioning with transforms (day(ts), bucket(16, id)); partition evolution", hudi: "Hive-style"}
+      - {f: Row-level changes, delta: "Copy-on-write; deletion vectors (merge-on-read)", iceberg: "Copy-on-write or merge-on-read (position/equality deletes)", hudi: "Copy-on-write or merge-on-read tables; strong upsert/CDC focus"}
+      - {f: Ecosystem, delta: "Databricks-native; UniForm exposes Iceberg metadata", iceberg: "Broadest engine support (Snowflake, BigQuery, Athena, Trino, Spark, Flink)", hudi: "Spark/Flink streaming ingestion"}
+  - type: heading
+    text: Keeping tables healthy
+  - type: steps
+    items:
+      - title: Compact recent partitions regularly
+        md: Target files of a few hundred MB to 1 GB. Many platforms do this automatically (optimised writes, auto-compaction).
+      - title: Cluster by what you filter and update on
+        md: Z-order, liquid clustering or Iceberg sort orders put related rows in the same files, so min/max stats let queries skip files and updates touch fewer of them.
+      - title: Don't over-partition
+        md: Partition by day for big tables, not by hour × country × device. A partition should hold at least a GB or so.
+      - title: Expire snapshots and vacuum
+        md: Set retention from your recovery and time-travel needs. Remove orphan files left by failed writes too.
+  - type: callout
+    kind: prod
+    md: "The format choice increasingly matters less than the catalog. Engines interoperate through catalogs that speak the Iceberg REST protocol (Unity Catalog, Polaris, AWS Glue), so one table can be written by Spark and read by Snowflake, Trino or DuckDB. See the Cloud platforms page for each provider's table-format support."
+  - type: related
+    slugs: [partitioning, snapshots, spark-joins, kafka, dbt]
+
+interview:
+  - level: mid
+    q: What does a table format like Delta or Iceberg add on top of Parquet files?
+    answer: A transaction log or metadata layer that makes the set of files a table, with ACID commits, consistent snapshots for readers, time travel, schema evolution, row-level updates and deletes, and per-file statistics for planning and skipping, without listing object storage.
+    listen_for: [ACID commits, Snapshots and time travel, Schema evolution, Row-level changes, Metadata-based planning]
+  - level: mid
+    q: What is the small-files problem and how do you fix it?
+    answer: Many tiny files (from frequent commits, streaming, over-partitioning or many writers) make every query pay per-file overhead, so scans slow down and metadata grows. Fix it with compaction (OPTIMIZE, rewrite_data_files, auto-compaction), fewer and larger commits, optimised writes, and coarser partitioning.
+    listen_for: [Causes, Per-file overhead, Compaction, Partitioning choices]
+  - level: senior
+    q: Copy-on-write or merge-on-read for a table receiving frequent upserts from CDC?
+    answer: Merge-on-read usually suits frequent small upserts, because writes are cheap and fast while readers merge delete files until compaction. Copy-on-write suits read-heavy tables with infrequent batch updates. Either way, cluster by the update key or time so changes touch few files, schedule compaction to fold deletes back in, and monitor read latency and write amplification.
+    listen_for: [Write vs read cost trade-off, Update frequency and read patterns, Clustering to limit touched files, Compaction schedule]
