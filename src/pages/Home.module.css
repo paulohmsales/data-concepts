@@ -1,0 +1,32 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem 2.5rem;
+}
+
+.grid h2 {
+  font-size: 1.05rem;
+  margin: 0.5rem 0;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list li {
+  margin-bottom: 0.7rem;
+}
+
+.list a {
+  font-weight: 600;
+  display: block;
+}
+
+.list span {
+  color: var(--muted);
+  font-size: 0.875rem;
+}

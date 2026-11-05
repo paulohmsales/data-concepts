@@ -1,6 +1,6 @@
-import styles from '../ab-testing/ExplainBack.module.css'
+import ExplainBackList, { type Question } from '../../components/ExplainBack.tsx'
 
-const questions: { q: string; a: string }[] = [
+const questions: Question[] = [
   {
     q: 'Why can’t a watermark-based incremental load see hard deletes, and what are two ways to handle them?',
     a: 'The job selects rows with updated_at > watermark; a deleted row no longer exists, so there is nothing to select. Options: soft deletes in the source (a deleted_at column that bumps updated_at), change data capture from the database log, or a periodic full key comparison (anti-join of target keys against source keys) to close or remove ghosts.',
@@ -24,23 +24,5 @@ const questions: { q: string; a: string }[] = [
 ]
 
 export default function ExplainBack() {
-  return (
-    <>
-      <p>
-        Answer each one out loud or in <code>notes/snapshots.md</code> <em>before</em> opening the
-        reference answer. If you can’t explain it without notes, rerun the matching scenario.
-      </p>
-      <ol className={styles.list}>
-        {questions.map(({ q, a }) => (
-          <li key={q}>
-            <p>{q}</p>
-            <details>
-              <summary>Reference answer</summary>
-              <p>{a}</p>
-            </details>
-          </li>
-        ))}
-      </ol>
-    </>
-  )
+  return <ExplainBackList questions={questions} />
 }

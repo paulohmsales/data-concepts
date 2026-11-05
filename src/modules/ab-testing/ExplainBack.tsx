@@ -1,10 +1,10 @@
 import { requiredN } from '../../core/abtest.ts'
 import { int } from '../../format.ts'
-import styles from './ExplainBack.module.css'
+import ExplainBackList, { type Question } from '../../components/ExplainBack.tsx'
 
 const pmN = requiredN({ baseline: 0.02, lift: 0.01, alpha: 0.05 }, 0.8)
 
-const questions: { q: string; a: string }[] = [
+const questions: Question[] = [
   {
     q: 'What exactly does a p-value of 0.03 mean, and what does it not mean?',
     a: 'If there were truly no difference, a gap at least this large would show up in about 3% of experiments by chance alone. It is not the probability that the null is true, not a 97% chance B is better, and it says nothing about how big or important the effect is.',
@@ -28,23 +28,5 @@ const questions: { q: string; a: string }[] = [
 ]
 
 export default function ExplainBack() {
-  return (
-    <>
-      <p>
-        Answer each one out loud or in <code>notes/ab-testing.md</code> <em>before</em> opening the
-        reference answer. If you can’t explain it without notes, go back to the matching view.
-      </p>
-      <ol className={styles.list}>
-        {questions.map(({ q, a }) => (
-          <li key={q}>
-            <p>{q}</p>
-            <details>
-              <summary>Reference answer</summary>
-              <p>{a}</p>
-            </details>
-          </li>
-        ))}
-      </ol>
-    </>
-  )
+  return <ExplainBackList questions={questions} />
 }

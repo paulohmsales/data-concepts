@@ -26,7 +26,8 @@ export default function PlotFigure({ build, label }: Props) {
 
   useEffect(() => {
     const el = ref.current
-    if (!el || width === 0) return
+    // too narrow to draw (e.g. mid-resize): margins alone would exceed it
+    if (!el || width < 160) return
     const opts = build(width, theme)
     const chart = Plot.plot({
       style: { background: 'transparent', color: theme.inkSecondary, fontSize: '12px' },

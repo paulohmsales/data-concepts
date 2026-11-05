@@ -1,0 +1,71 @@
+.seed {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.seed input {
+  width: 6rem;
+}
+
+.choice {
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.choice legend {
+  padding: 0;
+  margin-bottom: 0.3rem;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.options label {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.options input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.options label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+}
+
+.options .selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.reset {
+  align-self: flex-start;
+}
