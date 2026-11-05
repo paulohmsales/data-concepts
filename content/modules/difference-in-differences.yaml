@@ -1,0 +1,89 @@
+slug: difference-in-differences
+title: "When you can't randomise: difference-in-differences"
+track: experimentation
+summary: estimating the effect of a policy rolled out to some cities but not others, why before/after and treated-vs-control both mislead, and how to check the parallel-trends assumption.
+roles: [ds, da, mgr]
+lab: did
+order: 5
+
+intuition: |
+  Many important changes can't be A/B tested. A pricing policy launches in some cities, a law applies in one country, a new warehouse opens in one region. You still need to know what the change did.
+
+  The two obvious comparisons both fail:
+
+  - **Before vs after** in the treated cities mixes the effect with everything else that changed over time: growth, seasonality, a holiday.
+  - **Treated vs control after** mixes the effect with the fact that the groups were different to begin with; the treated cities may simply be bigger.
+
+  **Difference-in-differences (DiD)** combines them: how much did the treated group change, minus how much the control group changed over the same period? The control group's change stands in for what would have happened to the treated group anyway. That only works if, without the policy, both groups would have moved in parallel. That **parallel trends** assumption is the whole method, so you check it on the data before the change.
+
+experiments:
+  - title: The naive answers
+    goal: A fee policy truly reduces orders by 8k per city per week. Treated cities start 15k higher, everything grows, and a holiday spike lands just after launch.
+    setup: {}
+    look: Before vs after says about +16 and treated vs control says about +8, both the wrong sign. DiD says about −7.
+    why: |
+      Growth and the holiday raise the post-period for everyone, which fools before/after. The level gap fools the post-period comparison. DiD subtracts both, because the control group experienced the same growth and holiday.
+  - title: Broken parallel trends
+    goal: Treated cities were already growing 0.5k/week faster than control.
+    setup: {extraTrend: 0.5}
+    look: DiD now says about +3, positive, although the policy hurt. The event study's pre-period points climb steadily instead of hovering around zero.
+    why: |
+      DiD attributes every divergence after launch to the policy, including the one that was already happening. Always plot the event study, and if pre-period points trend, DiD's answer can't be trusted as is.
+  - title: Biased the other way
+    goal: Treated cities were growing more slowly (−0.4k/week).
+    setup: {extraTrend: -0.4}
+    look: DiD exaggerates the harm (about −15 vs −8).
+    why: |
+      A diverging pre-trend biases DiD in its own direction. Fixes are better control groups (matched on pre-period trends), synthetic control (a weighted mix of control units that tracks the treated group before launch), or modelling group-specific trends, with care.
+  - title: Noise
+    goal: Raise noise to 8.
+    setup: {noise: 8}
+    look: DiD jumps around from seed to seed (try several), between about −3 and −8.
+    why: |
+      With few units and noisy weeks, DiD has wide uncertainty. Report a confidence interval (clustered by unit, since weeks within a city are correlated), use more units or more pre-periods, and be wary of a single lucky estimate.
+
+deep_dive:
+  - type: heading
+    text: The estimate
+  - type: formula
+    text: "DiD = (treated after − treated before) − (control after − control before)        regression: y = α + β·treated + γ·post + δ·(treated × post), δ is the effect"
+  - type: steps
+    items:
+      - title: Pick a credible control group
+        md: Units that could have been treated but weren't, for reasons unrelated to the outcome. Neighbouring cities, the next rollout wave, similar stores. Avoid units the policy affects indirectly (spillovers to neighbours).
+      - title: Check pre-trends
+        md: Plot the treated − control gap for each period before launch (an event study). It should be flat. Testing only “no significant pre-trend” is weak with noisy data; look at the size of the drift too.
+      - title: Estimate with clustered errors
+        md: Use the regression form with unit and time fixed effects, and cluster standard errors by unit. Serial correlation within units makes naive errors far too small.
+      - title: Watch staggered rollouts
+        md: When units adopt at different times and effects change over time, the classic two-way fixed-effects regression can be badly biased. Use modern estimators (Callaway–Sant'Anna, Sun–Abraham) that compare each cohort only with not-yet-treated units.
+      - title: Run placebo tests
+        md: Pretend the policy launched earlier, or in control units, and check the estimate is about zero.
+  - type: heading
+    text: The quasi-experimental toolbox
+  - type: table
+    columns:
+      - {key: m, label: Method}
+      - {key: when, label: When}
+      - {key: assumption, label: Key assumption}
+    rows:
+      - {m: Difference-in-differences, when: "Some units treated from a date, others not", assumption: "Parallel trends without treatment"}
+      - {m: Synthetic control, when: "One or a few treated units (a country, a big city)", assumption: "A weighted mix of controls reproduces the treated unit's pre-period"}
+      - {m: Regression discontinuity, when: "Treatment assigned by a cutoff (score ≥ 600, age ≥ 65)", assumption: "Units just above and below the cutoff are comparable"}
+      - {m: Instrumental variables, when: "Something shifts treatment but affects the outcome only through it", assumption: "Exclusion restriction (hard to defend)"}
+      - {m: Switchback / geo experiments, when: "Marketplaces with interference between users", assumption: "Randomise by time slot or region instead of by user; it's still an experiment"}
+  - type: callout
+    kind: prod
+    md: Whenever you can, randomise the rollout instead. Pick the launch cities at random, or randomise the order of a staged rollout. That turns a quasi-experiment into an experiment and removes the need to trust parallel trends. Leaders who say “we can't A/B test this” can often randomise which regions go first.
+  - type: related
+    slugs: [ab-testing, simpsons-paradox, regression-to-the-mean, surge-pricing, trend-seasonality]
+
+interview:
+  - level: mid
+    q: How would you measure the effect of a policy launched in 5 of 20 cities?
+    answer: Difference-in-differences. Compare the change in the 5 treated cities to the change in the 15 controls over the same period, ideally with a regression including city and week fixed effects and errors clustered by city. First check parallel pre-trends with an event-study plot, and consider synthetic control if the treated cities are unusual.
+    listen_for: [DiD logic, Fixed effects and clustered errors, Pre-trend check, Alternatives if assumptions fail]
+  - level: senior
+    q: Your DiD shows a big positive effect, but a colleague says the treated cities were already growing faster. What do you do?
+    answer: Look at the event study. If pre-period gaps trend upward, parallel trends fails and the estimate is biased upward. Options are a better-matched control group (matching on pre-trends), synthetic control, or group-specific trends (sensitive to modelling choices). Placebo tests with fake launch dates help, as do sensitivity analyses showing how much trend deviation would erase the effect. Report the uncertainty honestly and, for future launches, randomise which cities get treated.
+    listen_for: [Event study diagnosis, Synthetic control or matching, Placebo and sensitivity analysis, Randomised rollout recommendation]
