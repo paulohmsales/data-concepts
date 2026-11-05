@@ -1,0 +1,68 @@
+.lab {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.presets button {
+  font-size: 0.8rem;
+}
+
+.active {
+  outline: 2px solid var(--accent);
+  font-weight: 600;
+}
+
+.editor {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  resize: vertical;
+}
+
+.bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0.4rem 0;
+  color: var(--muted);
+}
+
+.error {
+  color: #d03b3b;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}
+
+.null {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.note,
+.noteBug {
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+}
+
+.noteBug {
+  border-left-color: #d03b3b;
+}

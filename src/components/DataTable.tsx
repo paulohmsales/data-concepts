@@ -15,12 +15,15 @@ export default function DataTable<T>({
   rowKey,
   rowClass,
   caption,
+  onRowClick,
 }: {
   rows: readonly T[]
   columns: readonly Column<T>[]
   rowKey: (row: T, i: number) => string | number
-  rowClass?: (row: T, i: number) => 'hl' | 'dim' | 'bad' | undefined
+  rowClass?: (row: T, i: number) => 'hl' | 'dim' | 'bad' | 'cur' | undefined
   caption?: ReactNode
+  /** Makes rows selectable (click or Enter). */
+  onRowClick?: (row: T, i: number) => void
 }) {
   return (
     <div className={styles.wrap}>
@@ -39,7 +42,13 @@ export default function DataTable<T>({
           {rows.map((r, i) => {
             const cls = rowClass?.(r, i)
             return (
-              <tr key={rowKey(r, i)} className={cls ? styles[cls] : undefined}>
+              <tr
+                key={rowKey(r, i)}
+                className={[cls ? styles[cls] : '', onRowClick ? styles.clickable : ''].join(' ').trim() || undefined}
+                onClick={onRowClick ? () => onRowClick(r, i) : undefined}
+                onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(r, i) : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+              >
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === 'right' ? styles.right : undefined}>
                     {c.render(r)}

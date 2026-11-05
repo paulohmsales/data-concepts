@@ -24,18 +24,41 @@ function getInstance(): Promise<duckdb.AsyncDuckDB> {
   return instance
 }
 
-/** A fresh in-memory database behind the Db interface. */
+/** Arrow hands DATE/TIMESTAMP back as epoch milliseconds; turn those columns into Date objects. */
+function dateColumns(table: { schema: { fields: { name: string; type: unknown }[] } }): string[] {
+  return table.schema.fields.filter((f) => /^(Date|Timestamp)/.test(String(f.type))).map((f) => f.name)
+}
+
+/**
+ * A connection behind the Db interface. Statements are queued so callers (several panels on one
+ * page) never run concurrently on the same connection.
+ */
 export async function wasmDb(): Promise<Db & { close: () => Promise<void> }> {
   const db = await getInstance()
   const conn = await db.connect()
+  let queue: Promise<unknown> = Promise.resolve()
+  const enqueue = <T>(job: () => Promise<T>): Promise<T> => {
+    const next = queue.then(job, job)
+    queue = next.catch(() => {})
+    return next
+  }
   return {
-    async all<T = Row>(sql: string) {
-      const table = await conn.query(sql)
-      return table.toArray().map((r) => normalizeRow(r.toJSON() as Row)) as T[]
+    all<T = Row>(sql: string) {
+      return enqueue(async () => {
+        const table = await conn.query(sql)
+        const dates = dateColumns(table)
+        return table.toArray().map((r) => {
+          const row = normalizeRow(r.toJSON() as Row)
+          for (const k of dates) if (typeof row[k] === 'number') row[k] = new Date(row[k] as number)
+          return row
+        }) as T[]
+      })
     },
-    async run(sql: string) {
-      await conn.query(sql)
+    run(sql: string) {
+      return enqueue(async () => {
+        await conn.query(sql)
+      })
     },
-    close: () => conn.close(),
+    close: () => enqueue(() => conn.close()),
   }
 }

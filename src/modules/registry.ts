@@ -84,6 +84,27 @@ export const modules: ModuleEntry[] = [
     Component: lazy(() => import('./cuped/Cuped.tsx')),
   },
   {
+    slug: 'join-fanout',
+    title: 'Grain and join fan-out',
+    category: 'Analytics engineering',
+    summary: 'why revenue doubles after a join, the SUM(DISTINCT) trap and the LEFT JOIN that isn’t.',
+    Component: lazy(() => import('./join-fanout/JoinFanout.tsx')),
+  },
+  {
+    slug: 'window-functions',
+    title: 'Window functions',
+    category: 'Analytics engineering',
+    summary: 'partitions, peers and frames row by row; the default-frame and tie traps.',
+    Component: lazy(() => import('./window-functions/WindowFunctions.tsx')),
+  },
+  {
+    slug: 'surrogate-keys',
+    title: 'Surrogate keys',
+    category: 'Analytics engineering',
+    summary: 'row_number keys that reassign your facts, and hash keys that collide on NULLs and concat.',
+    Component: lazy(() => import('./surrogate-keys/SurrogateKeys.tsx')),
+  },
+  {
     slug: 'snapshots',
     title: 'Snapshots and incremental loads',
     category: 'Data engineering',

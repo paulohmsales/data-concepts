@@ -31,3 +31,14 @@ export function tracing(db: Db, onSql: (sql: string) => void): Db {
     },
   }
 }
+
+/** Display a cell: NULL, dates as YYYY-MM-DD (with time when it isn't midnight), 2-decimal floats. */
+export function formatCell(v: unknown): string {
+  if (v === null || v === undefined) return 'NULL'
+  if (v instanceof Date) {
+    const iso = v.toISOString()
+    return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ')
+  }
+  if (typeof v === 'number' && !Number.isInteger(v)) return v.toFixed(2)
+  return String(v)
+}

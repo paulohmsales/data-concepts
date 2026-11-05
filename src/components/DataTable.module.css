@@ -44,3 +44,18 @@
 .bad td {
   background: color-mix(in srgb, #d03b3b 12%, transparent);
 }
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover td,
+.clickable:focus-visible td {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.cur td {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  font-weight: 600;
+}
