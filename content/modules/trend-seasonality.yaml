@@ -1,0 +1,26 @@
+slug: trend-seasonality
+title: Trend vs seasonality
+track: data-analysis
+summary: moving averages, YoY vs MoM, and comparing Monday with Sunday.
+roles:
+- da
+- ds
+lab: trend-seasonality
+order: 3
+intuition: |
+  Most business metrics are several rhythms on top of each other: a slow **trend** (the business growing), a **yearly season** (December peaks, summer lulls), a **weekly pattern** (weekends differ), and day-to-day **noise**. The question people actually ask, “are we growing?”, is about the trend alone. The other rhythms are in the way.
+
+  Two tools separate them. A **moving average** whose window is a whole number of cycles (7 days, 28 days) cancels that cycle exactly. And comparing a period with **the same period one cycle earlier** (this Monday vs last Monday, this December vs last December) compares like with like.
+check:
+- q: December revenue is up 25% on November. Is the business doing well?
+  a: |-
+    You can’t tell from that: December is seasonally high. Compare with December last year (YoY), or with a seasonally adjusted series, to separate trend from season.
+- q: Why does a 7-day moving average remove the weekly pattern but a 10-day one doesn’t?
+  a: |-
+    A 7-day window always contains exactly one of each weekday, so the weekly effects sum to zero. A 10-day window contains some weekdays twice, and which ones changes as it slides, so a weekly wiggle remains.
+- q: What are the downsides of year-over-year comparisons?
+  a: |-
+    They need a year of history, react slowly (a change shows up fully only after months), and can be distorted by calendar shifts (Easter, an extra weekend day, leap years) or by anything unusual last year (the base effect).
+- q: Describe additive decomposition in a sentence.
+  a: |-
+    Write the series as trend + seasonal + remainder: estimate the trend with a moving average spanning whole cycles, estimate each season as the average deviation from trend at that point in the cycle, and what is left is the remainder.

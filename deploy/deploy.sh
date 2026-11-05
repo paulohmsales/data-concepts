@@ -12,12 +12,13 @@ REMOTE=/opt/data-concepts
 cd "$(dirname "$0")/.."
 npm ci
 npm test
+(cd api && uv run pytest -q)
 npm run build
 
 TAG="$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo -dirty)"
 
 ssh "$DEPLOY_HOST" "mkdir -p $REMOTE/build"
-rsync -az --delete dist deploy "$DEPLOY_HOST:$REMOTE/build/"
+rsync -az --delete --exclude .venv --exclude content.db --exclude __pycache__ --exclude .pytest_cache dist deploy api content "$DEPLOY_HOST:$REMOTE/build/"
 
 ssh "$DEPLOY_HOST" bash -s -- "$REMOTE" "$TAG" "$DOMAIN" <<'REMOTE_SCRIPT'
 set -euo pipefail
@@ -31,7 +32,8 @@ if [ ! -f .env ]; then
 fi
 set -a; . ./.env; set +a
 docker build -q -t "data-concepts:$TAG" -f build/deploy/Dockerfile build
-IMAGE="data-concepts:$TAG" DOMAIN="$DOMAIN" docker stack deploy -c build/deploy/stack.yml data-concepts
+docker build -q -t "data-concepts-api:$TAG" -f build/deploy/api.Dockerfile build
+IMAGE="data-concepts:$TAG" API_IMAGE="data-concepts-api:$TAG" DOMAIN="$DOMAIN" docker stack deploy -c build/deploy/stack.yml data-concepts
 REMOTE_SCRIPT
 
 echo "Deployed data-concepts:$TAG → https://$DOMAIN"

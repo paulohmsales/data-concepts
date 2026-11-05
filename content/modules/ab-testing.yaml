@@ -1,0 +1,203 @@
+slug: ab-testing
+title: A/B testing
+track: experimentation
+summary: p-values, power, sample size, peeking and the winner’s curse.
+roles: [ds, da, mgr]
+lab: ab-testing
+order: 1
+
+intuition: |
+  You change a button and want to know whether more people now sign up. You split visitors at random: half see the old version (A), half the new one (B). Even if the change does nothing, the two groups will not convert at exactly the same rate, just as two runs of 100 coin flips rarely give the same number of heads.
+
+  So the real question is: *is the gap bigger than luck usually produces?* The **p-value** answers a narrow version of that. If the change truly did nothing, how often would luck alone give a gap at least this big? A small p-value means “luck rarely does this”. It does *not* mean “there is a 97% chance B is better”.
+
+  You pick a cut-off, **α** (usually 5%), before you start. Below it, you call the result significant. When there is no effect you will still be fooled α of the time. **Power** is the other side: when there *is* an effect, how often do you catch it? Small effects on small samples are hard to catch, and the few that do “win” tend to be lucky overshoots.
+
+experiments:
+  - title: Manufacture false positives
+    goal: Run 1,000 tests of a change that does nothing.
+    setup: {lift: 0}
+    look: "View 2: about 5% come out significant, and the p-value histogram is flat."
+    why: |
+      With no effect, the p-value is uniformly distributed between 0 and 1, so exactly a share α of tests land below α. That 5% is not a bug: it is the false-positive rate you agreed to when you picked α.
+  - title: Peek every day
+    goal: Same useless change, but check 20 times and stop at the first significant look.
+    setup: {lift: 0, looks: 20}
+    look: "The peeking chart: “called a winner by a peeker” lands near 25%, five times the honest rate."
+    why: |
+      The running p-value is a random walk that dips below α now and then even with no effect, and every look is another draw. Fixed-horizon tests look once; sequential designs raise the bar at each look so the total stays at α.
+  - title: Trust an underpowered winner
+    goal: A real +5% lift, but only 2,000 users per arm.
+    setup: {n: 2000}
+    look: Power drops to about 8%, and the winner’s-curse chart shows significant results averaging several times the true lift.
+    why: |
+      Only estimates that overshoot by about 2 standard errors pass the bar, and at low power the true effect sits far below that bar. Filtering on significance keeps the lucky overshoots.
+  - title: Plan a test for a tiny effect
+    goal: Baseline 2%, hoped-for lift +1% relative.
+    setup: {baseline: 0.02, lift: 0.01, n: 100000}
+    look: "View 3’s “users per arm for 80% power”: about 7.7 million. At 100,000 users, power is about 6%, barely above α."
+    why: |
+      n scales with 1/d². A 0.02-point difference is tiny next to the binomial noise of a 2% rate, so it takes millions of users per arm to see it.
+  - title: Quadruple the sample
+    goal: Compare the confidence interval at 2,500 and at 10,000 users per arm.
+    setup: {n: 2500}
+    look: Note the interval width in View 1, then drag n to 10,000. It halves.
+    why: |
+      The standard error is proportional to 1/√n. Four times the data halves the uncertainty; to halve it again you need sixteen times the original.
+
+deep_dive:
+  - type: heading
+    text: What an A/B test actually estimates
+  - type: markdown
+    md: |
+      The quantity you want is the **average treatment effect**: how much the conversion rate would change if *everyone* got B instead of A. You can never see the same user both ways, so you randomise. A coin decides who sees which version, which makes the two groups alike in everything (device, mood, intent, seasonality) except the change, *on average*. The difference in their rates is then an unbiased estimate of the effect, and the only thing left to argue about is chance.
+
+  - type: heading
+    text: Two bells, one line
+  - type: visual
+    key: ab.twoBells
+    props: {effectSe: 2.5, alpha: 0.05}
+    caption: The estimated difference under “no effect” (grey) and under the true effect (blue), in units of the standard error. Drag the sliders. Everything to the right of the line is “significant”. The red sliver is α (false positives); the blue area is power.
+  - type: markdown
+    md: |
+      This one picture holds the whole design problem. The test rejects when the estimate lands beyond the critical line, at about 1.96 standard errors. **Power** is how much of the blue bell clears that line. You can raise it three ways: a bigger true effect (move the blue bell right), more users (the standard error shrinks, so the *same* effect is more SEs away), or a looser α (move the line left, at the price of more red).
+
+  - type: heading
+    text: The test, step by step
+  - type: steps
+    items:
+      - title: Observed rates
+        md: "p̂_A = conversions_A / n_A, likewise for B; the estimate is the difference d̂ = p̂_B − p̂_A."
+      - title: How much would d̂ wobble if there were no effect?
+        md: "Under H₀ both arms share one rate, best estimated by pooling: p̄ = (x_A + x_B) / (n_A + n_B). Each rate is an average of 0/1 draws, so its variance is p(1 − p)/n, and variances of independent estimates add."
+      - title: Standardise
+        md: "z = d̂ / SE₀: how many typical wobbles the observed gap is. By the central limit theorem z is close to standard normal under H₀ (given a few dozen conversions per arm)."
+      - title: p-value
+        md: "p = 2·(1 − Φ(|z|)): the probability, with no effect, of a gap at least this large in either direction. Reject H₀ when p < α."
+      - title: Confidence interval for the effect
+        md: "The interval describes the actual difference, so it uses each arm’s own variance (unpooled). That is why, right at the boundary, the test and the interval can very occasionally disagree."
+  - type: formula
+    text: |
+      SE₀ = √( p̄(1 − p̄) · (1/n_A + 1/n_B) )        z = d̂ / SE₀
+      CI  = d̂ ± z₁₋α/₂ · √( p̂_A(1 − p̂_A)/n_A + p̂_B(1 − p̂_B)/n_B )
+  - type: worked
+    title: 200 of 1,000 vs 250 of 1,000
+    md: |
+      p̂_A = 20%, p̂_B = 25%, d̂ = 5 pp. Pooled p̄ = 450 / 2,000 = 22.5%, so SE₀ = √(0.225 · 0.775 · 2/1000) = 0.0187. z = 0.05 / 0.0187 = 2.68, p = 0.0074. The 95% interval runs from 1.35 pp to 8.65 pp. So the result is significant, and the effect could plausibly be anything from about 1.3 to 8.7 points. The interval tells you more than the p-value.
+
+  - type: heading
+    text: Power, minimum detectable effect and sample size
+  - type: formula
+    text: "n ≈ ( z₁₋α/₂·√(2p̄(1 − p̄)) + z₁₋β·√(p_A(1 − p_A) + p_B(1 − p_B)) )² / d²"
+    caption: Users per arm for power 1 − β (two-sided). With α = 0.05 and 80% power the multiplier is about (1.96 + 0.84)².
+  - type: markdown
+    md: |
+      A good back-of-the-envelope version is **n ≈ 16·p(1 − p)/d² per arm** (α = 0.05, 80% power). The d² in the denominator is the whole story: halve the effect you want to detect and you need four times the users.
+  - type: worked
+    title: 10% baseline, 5% relative lift
+    md: |
+      d = 0.10 × 0.05 = 0.005. n ≈ 16 × 0.09 / 0.005² = 57,600 per arm; the exact formula gives 57,763. At 5,000 users a day split two ways, that’s about 23 days. Detecting a 2% relative lift instead needs about 356,000 per arm.
+  - type: callout
+    kind: note
+    title: Minimum detectable effect
+    md: |
+      Turn the formula around. Given the traffic you have, the smallest effect you can reliably detect is MDE ≈ 2.8 · √(2p(1 − p)/n). If the MDE is bigger than any effect the change could plausibly have, don’t run the test as designed: test a bolder change, use a more sensitive metric, or reduce variance (CUPED).
+
+  - type: heading
+    text: Why peeking breaks the 5%
+  - type: visual
+    key: ab.peekWalk
+    props: {looks: 20}
+    caption: The z-statistic of one experiment with no real effect, as data arrives. Press play to run more experiments. The flat lines at ±1.96 are what a peeker uses at every look; the curved boundary (O’Brien–Fleming) is strict early and relaxes to about 2 at the end.
+  - type: markdown
+    md: |
+      The 5% guarantee is for *one* look at a sample size fixed in advance. The running z-statistic is a random walk: early on it swings widely, and each look is another chance to catch it beyond the line. With 5 looks the false-positive rate is about 14%; with 20, about 25%. If you could look continuously forever it would reach 100%, because the walk eventually crosses any fixed line.
+
+      Fixes, from simplest to most flexible:
+
+      - **Fixed horizon:** compute n up front and decide only at the end. Dashboards can show the data, but nobody stops early.
+      - **Group sequential designs:** plan K interim looks and spend α across them, with strict thresholds early (O’Brien–Fleming: |z| > 4.05, 2.86, 2.34, 2.02 for four looks), so the overall error stays at 5%.
+      - **Always-valid inference** (mixture SPRT, confidence sequences): p-values you may check at any time, at the cost of wider intervals. Most commercial experimentation platforms use something like this.
+      - **Bayesian analysis is not a free pass.** “Stop when P(B > A) > 95%”, checked daily, has inflated error rates too, unless the decision rule was designed for it.
+
+  - type: heading
+    text: The winner’s curse (type M errors)
+  - type: markdown
+    md: |
+      Estimates scatter around the truth with spread SE, and significance keeps only those beyond about 2·SE. When the true effect is small relative to SE (low power), the survivors are the lucky overshoots, so the average significant estimate exaggerates the effect. At 30% power the exaggeration is typically about 1.8×; at 10% power, more than 3×. A sign error (a “significant” result in the wrong direction) also becomes possible. Gelman calls these type M and type S errors.
+  - type: callout
+    kind: prod
+    md: |
+      Launch decisions are often fine, because the sign is right. The *forecast* built on the measured lift is not. Discount wins from underpowered tests, replicate the important ones, or shrink estimates with a prior learned from your past experiments.
+
+  - type: heading
+    text: What goes wrong in real experiments
+  - type: markdown
+    md: |
+      - **Unit mismatch:** randomise by user but analyse per session or pageview, and the observations are no longer independent. The naive SE is too small, so false positives go up. Use the delta method or cluster-robust errors for ratio metrics.
+      - **Sample ratio mismatch:** if arm sizes are off, something removed users non-randomly. Check before reading any metric (see [Sample ratio mismatch](/sample-ratio-mismatch)).
+      - **Novelty and primacy:** users react to change itself. Look at effects by days since exposure, and run for at least a full weekly cycle.
+      - **Many metrics and segments:** name one primary metric up front; treat everything else as exploratory or correct for it (see [Multiple comparisons](/multiple-comparisons)).
+      - **Interference:** in marketplaces and social products, treated users affect control users (shared drivers, shared inventory). User-level randomisation is then biased; use cluster or switchback designs.
+      - **Practical vs statistical significance:** with millions of users, tiny effects are significant. Decide the smallest effect worth shipping before you look.
+  - type: related
+    slugs: [sample-ratio-mismatch, multiple-comparisons, cuped, confidence-intervals, clt]
+
+interview:
+  - level: junior
+    q: Explain a p-value of 0.03 to a product manager, without jargon.
+    answer: |
+      “If the new design truly made no difference, we’d see a gap this big or bigger in about 3 out of 100 experiments, just from which users happened to land in each group. That’s rare enough that we believe the gap is real. It doesn’t tell us how big the effect is (that’s the interval), and it isn’t a 97% chance that B is better.”
+    listen_for: [Conditional on no effect, “At least this extreme”, Not the probability the hypothesis is true, Points to the interval for size]
+    follow_ups:
+      - q: And if p = 0.06?
+        a: Not enough evidence at our 5% bar, which is not proof of no effect. Look at the interval and the power. An underpowered test can’t tell “nothing” from “small”.
+  - level: mid
+    q: Design an A/B test for a new checkout button. Walk me through every decision.
+    answer: |
+      - **Hypothesis and primary metric:** checkout conversion per user who reaches the cart. Guardrails: revenue per user, refund rate, latency.
+      - **Unit:** randomise by user (a logged-in id or a stable cookie), assigned when the user sees the cart, so users who never reach it don’t dilute the effect.
+      - **Size:** baseline 30%, smallest lift worth shipping 2% relative, so d = 0.6 pp and n ≈ 16 · 0.21 / 0.006² ≈ 93,000 per arm. With 15,000 cart users a day that’s about 2 weeks; round up to whole weeks.
+      - **Analysis plan, written before launch:** two-sided test at α = 0.05, fixed horizon (or a sequential method), SRM check first, no early stopping.
+      - **Rollout:** a 1% ramp for a day to catch bugs, then 50/50.
+    listen_for: [One primary metric plus guardrails, Randomisation unit = analysis unit, Sample size from a pre-set MDE, Whole weeks, SRM check and a written plan]
+    follow_ups:
+      - q: Traffic only allows 3 weeks; your MDE needs 6. What now?
+        a: Detect a bigger effect (a bolder change), use a more sensitive metric closer to the change, reduce variance with CUPED, use a one-sided test if only harm matters for the decision, or accept lower power explicitly.
+  - level: mid
+    q: The test is significant on day 3 of a planned 14. The PM wants to ship. What do you say?
+    answer: |
+      Not yet. The 5% error rate only holds at the planned end. Checking along the way and stopping at the first significant reading inflates false positives several-fold, and early wins are usually exaggerated (the winner’s curse). Day 3 also misses weekly patterns and novelty effects. If stopping early matters to the business, switch future tests to a sequential design with proper boundaries.
+    listen_for: [Peeking inflates α, Early effects are exaggerated, Weekly cycle and novelty, Offers a sequential alternative]
+  - level: senior
+    q: Your PM wants to detect a 1% relative lift on a 2% conversion rate. What do you tell them?
+    answer: |
+      d = 0.02 pp, so the test needs about 7.7 million users per arm at 80% power. Unless we have that traffic (and that patience), the test can’t answer the question. Options: aim for a bigger effect; move the metric closer to the change (add-to-cart instead of purchase); reduce variance; or decide without a test if the change is cheap and low-risk.
+    listen_for: [Computes the number, d² intuition, Offers alternatives rather than “no”]
+  - level: senior
+    q: You randomise by user but report revenue per session. What goes wrong, and how do you fix it?
+    answer: |
+      Sessions from the same user are correlated, so treating them as independent understates the variance and the p-values come out too small. And if the treatment changes the number of sessions, the denominator itself moves. Analyse at the user level (revenue per user), or use the delta method or cluster-robust standard errors for the ratio, and report sessions per user as a separate metric.
+    listen_for: [Unit of randomisation vs unit of analysis, Correlated observations make the SE too small, Delta method, The treatment can move the denominator]
+  - level: staff
+    q: You’re asked to make experimentation trustworthy across the company. What do you build or enforce?
+    answer: |
+      - A platform that assigns, logs exposure and computes results the same way every time (no hand analysis for launch decisions).
+      - Automatic checks: SRM, pre-period A/A balance, guardrail metrics, and a sample-size calculator with an MDE.
+      - Sequential or always-valid statistics, so dashboards can be watched safely.
+      - Pre-registration of the hypothesis and primary metric; corrections for multiple metrics.
+      - Variance reduction by default (CUPED), and a library of past effects to calibrate expectations and shrink estimates.
+      - A review culture: review of high-stakes tests and a searchable archive of results.
+    listen_for: [Automation over policy, SRM and guardrails built in, Peeking-safe statistics, Institutional memory]
+
+check:
+  - q: What exactly does a p-value of 0.03 mean, and what does it not mean?
+    a: If there were truly no difference, a gap at least this large would show up in about 3% of experiments by chance alone. It is not the probability that the null is true, not a 97% chance B is better, and it says nothing about how big or important the effect is.
+  - q: Why does doubling n not halve the confidence interval?
+    a: The standard error shrinks with √n, not n. Doubling n divides the width by √2 ≈ 1.41, so it narrows by about 29%. To halve the interval you need 4× the users.
+  - q: Why does peeking inflate false positives when each single look uses α = 0.05?
+    a: Each look is another chance to be fooled, and the running p-value wanders, so the chance it dips below 0.05 at least once across many looks is far above 5% (about 25% for 20 looks). Stopping at the first dip turns those temporary lows into reported wins.
+  - q: At 30% power, why do the significant results overstate the true lift?
+    a: Estimates scatter around the true lift. At low power the significance cut-off sits above the true effect, so only estimates that overshot by luck clear it. Filtering on significance keeps the overshoots, so their average is biased upward.
+  - q: Your PM wants to detect a 1% relative lift on a 2% baseline. What do you tell them, and how did you get it?
+    a: 2% → 2.02% is a 0.02 percentage-point gap. At α = 0.05 and 80% power the formula needs about 7.7 million users per arm. Unless they have that traffic, aim for a bigger change, accept a larger minimum detectable effect, or use variance reduction such as CUPED.

@@ -1,0 +1,26 @@
+slug: cuped
+title: CUPED
+track: experimentation
+summary: pre-period data as free traffic, and the covariate that eats your effect.
+roles:
+- ds
+lab: cuped
+order: 4
+intuition: |
+  Most of the noise in an A/B test is that users differ: heavy users spend a lot in either arm, light users spend little. That spread has nothing to do with the treatment, but it widens every interval and costs you power.
+
+  You already know a lot about each user’s level from **before** the experiment started. **CUPED** subtracts the part of the outcome that last month’s behaviour predicts: y′ = y − θ·(x − x̄), with θ the regression slope of y on x. What remains is mostly the treatment plus the unpredictable part, so variance shrinks by a factor of (1 − ρ²). With ρ = 0.7 that is half the variance, the same as doubling your traffic.
+
+  Because x was fixed before randomisation, it is unrelated to the treatment, so subtracting it can’t create or remove an effect. That condition is the one Section 3 breaks.
+check:
+- q: Explain CUPED in two sentences.
+  a: |-
+    Use each user’s pre-experiment value of the metric to predict their outcome and analyse only the part that prediction can’t explain. That removes variance unrelated to the treatment, shrinking intervals by √(1 − ρ²) without changing the expected effect.
+- q: With ρ = 0.6, how much traffic is CUPED worth?
+  a: Variance × (1 − 0.36) = 0.64, so it is equivalent to 1/0.64 ≈ 1.56× the users.
+- q: Why must the covariate be measured before the experiment?
+  a: |-
+    Then it is independent of assignment, so its arm means differ only by chance and adjusting can’t shift the expected difference. A covariate influenced by the treatment carries part of the effect, and adjusting removes that part, biasing the estimate (usually toward zero).
+- q: What do you use for new users who have no pre-period data?
+  a: |-
+    Any pre-assignment information works: a constant (no adjustment for them), signup-time attributes, or the metric over a short window before exposure. CUPED is just regression adjustment on pre-treatment covariates; missing values can be filled with a constant plus an indicator.

@@ -1,0 +1,26 @@
+# Providers compared on /platforms. Clouds own the infrastructure; platforms run on top of a cloud.
+- key: aws
+  name: AWS
+  kind: cloud
+  color: "#eb6834"
+  summary: The broadest menu of building blocks. You assemble the platform yourself from many single-purpose services, glued together by S3 and IAM.
+- key: gcp
+  name: Google Cloud
+  kind: cloud
+  color: "#2a78d6"
+  summary: Built around BigQuery, a serverless warehouse with no clusters to size. Strong managed streaming (Pub/Sub, Dataflow) and a tightly integrated analytics stack.
+- key: azure
+  name: Azure
+  kind: cloud
+  color: "#1baf7a"
+  summary: Microsoft Fabric bundles lake (OneLake), warehouse, pipelines and Power BI under one capacity-based bill; strongest where Microsoft 365 and Power BI already are.
+- key: snowflake
+  name: Snowflake
+  kind: platform
+  color: "#29b5e8"
+  summary: A managed SQL data cloud that runs on AWS, Azure or GCP. Storage and compute fully separated, near-zero administration, and data sharing across accounts.
+- key: databricks
+  name: Databricks
+  kind: platform
+  color: "#d03b3b"
+  summary: The lakehouse built on Spark and Delta Lake, running in your cloud account. One platform for data engineering, SQL, streaming and ML on open formats.

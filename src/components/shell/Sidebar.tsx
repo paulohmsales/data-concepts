@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { CATEGORIES, modules } from '../../modules/registry.ts'
+import { useCatalog } from '../../lib/api.ts'
 import { ChevronIcon } from './icons.tsx'
 import styles from './Shell.module.css'
 
 /** Tracks and modules. The current module's track starts open; the others can be toggled. */
 export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const { pathname } = useLocation()
-  const currentTrack = modules.find((m) => `/${m.slug}` === pathname)?.category
+  const { tracks, modules } = useCatalog()
+  const currentTrack = modules.find((m) => `/${m.slug}` === pathname)?.track
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState('')
   const q = filter.trim().toLowerCase()
@@ -21,13 +22,16 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <NavLink to="/roles" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
           Roles and paths
         </NavLink>
+        <NavLink to="/platforms" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
+          Cloud platforms compared
+        </NavLink>
         <NavLink to="/integrations" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
           Integrations
         </NavLink>
       </div>
       <input type="search" className={styles.filter} placeholder="Filter modules…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter modules" />
-      {CATEGORIES.map((cat) => {
-        const list = modules.filter((m) => m.category === cat && (!q || `${m.title} ${m.summary}`.toLowerCase().includes(q)))
+      {tracks.map(({ key: cat, title }) => {
+        const list = modules.filter((m) => m.track === cat && (!q || `${m.title} ${m.summary}`.toLowerCase().includes(q)))
         if (!list.length) return null
         const open = q !== '' || !closed.has(cat) || cat === currentTrack
         return (
@@ -46,7 +50,7 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               }
             >
               <ChevronIcon open={open} />
-              <span>{cat}</span>
+              <span>{title}</span>
               <span className={styles.count}>{list.length}</span>
             </button>
             {open && (

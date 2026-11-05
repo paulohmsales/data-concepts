@@ -1,0 +1,40 @@
+# Reference pipelines. Each stage names a category; /platforms fills in each provider's service.
+- key: batch-elt
+  name: Batch ELT into a warehouse
+  description: The classic analytics stack. Copy source data in raw, transform it inside the warehouse with SQL, serve dashboards.
+  stages:
+    - {label: Extract from app databases, category: ingestion}
+    - {label: Land raw files, category: object-storage}
+    - {label: Load and store, category: warehouse}
+    - {label: Model in SQL, category: transformation}
+    - {label: Schedule and retry, category: orchestration}
+    - {label: Dashboards, category: bi}
+- key: streaming
+  name: Real-time events (the surge-pricing shape)
+  description: Events stream in continuously, are aggregated in short windows, and serve an application within seconds.
+  stages:
+    - {label: Event log, category: event-streaming}
+    - {label: Windowed aggregation, category: stream-processing}
+    - {label: Low-latency serving store, category: operational-db}
+    - {label: History for analytics, category: warehouse}
+    - {label: Monitor and trigger, category: serverless-compute}
+- key: lakehouse
+  name: Lakehouse with medallion layers
+  description: CDC and files land as bronze, get cleaned to silver and aggregated to gold, all as open tables on object storage.
+  stages:
+    - {label: CDC and file ingestion, category: ingestion}
+    - {label: Bronze/silver/gold storage, category: object-storage}
+    - {label: Open tables, category: table-format}
+    - {label: Transform at scale, category: batch-processing}
+    - {label: Govern and discover, category: catalog}
+    - {label: SQL for analysts, category: lake-query}
+- key: rag
+  name: Retrieval-augmented generation (RAG)
+  description: Documents are chunked and embedded, stored in a vector index, and retrieved to ground an LLM’s answers.
+  stages:
+    - {label: Store documents, category: object-storage}
+    - {label: Chunk and embed, category: batch-processing}
+    - {label: Vector index, category: vector-search}
+    - {label: LLM, category: genai}
+    - {label: App and API, category: serverless-compute}
+    - {label: Evaluate and track, category: ml-platform}

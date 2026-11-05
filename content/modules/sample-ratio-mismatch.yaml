@@ -1,0 +1,26 @@
+slug: sample-ratio-mismatch
+title: Sample ratio mismatch
+track: experimentation
+summary: 'when arm sizes are off, the result is broken: the chi-square check and the leaky variant.'
+roles:
+- ds
+- de
+lab: sample-ratio-mismatch
+order: 3
+intuition: |
+  You planned a 50/50 split. Randomisation is a coin flip per user, so the arms are never exactly equal, but with 100,000 users they should be within a few hundred of each other. When they are off by more than chance allows, something is removing or adding users in one arm *after* randomisation: a redirect that drops some, a crash on one variant, bots filtered unevenly, a tracking event that fires later in B.
+
+  That is a **sample ratio mismatch** (SRM), and it is serious. The users who went missing are rarely a random subset, so the arms are no longer comparable and the A/B result can’t be trusted, however good it looks. The check is a chi-square test of the counts against the planned split. It is cheap, so run it on every experiment before reading any metric.
+check:
+- q: What is a sample ratio mismatch, and how do you test for it?
+  a: |-
+    The observed arm sizes differ from the planned allocation by more than randomisation explains. Test with a chi-square goodness-of-fit test of the counts against the planned shares; a very small p-value (often < 0.001) means something after assignment is adding or dropping users unevenly.
+- q: Why does an SRM invalidate the metric comparison, even if the metric difference is significant?
+  a: |-
+    Randomisation guaranteed comparable arms only before the loss. Whatever removed users from one arm usually removed a non-random kind (slow connections, bots, impatient users), so the arms now differ in composition and the metric gap mixes the treatment effect with that selection.
+- q: A 50/50 test has 500,400 vs 499,600 users. Is that a problem?
+  a: |-
+    Gap 800, chi-square = 800²/1,000,000 = 0.64, p ≈ 0.42: no. Compare with 502,000 vs 498,000: chi-square 16, p ≈ 0.00006: investigate.
+- q: Name three common causes of SRM.
+  a: |-
+    Variant-specific crashes or slow loads that stop logging; redirects or extra page loads in one arm; bot filtering or user de-duplication that hits arms unevenly; assignment happening at a different point than exposure logging; and carry-over from a previous experiment with the same bucketing.

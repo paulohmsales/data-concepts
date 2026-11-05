@@ -1,22 +1,11 @@
 import { Link } from 'react-router'
-import { CATEGORIES, modules, ROLES, type Role } from '../modules/registry.ts'
+import { useCatalog } from '../lib/api.ts'
 import styles from './Pages.module.css'
 
-const TRACK_BLURB: Record<string, string> = {
-  Statistics: 'What averages, intervals and samples can and can’t tell you.',
-  Experimentation: 'Running tests that don’t lie: power, peeking, broken splits, variance.',
-  'Analytics engineering': 'Modelling the warehouse so every number has one meaning.',
-  'Data engineering': 'Moving data reliably: loads, retries, late events, storage layout.',
-  'Data analysis': 'Reading behaviour over time: cohorts, funnels, seasons.',
-  'Machine learning': 'Training models that generalise, and choosing how to act on them.',
-  'AI engineering': 'Building on LLMs: retrieval, agents, evals, cost.',
-  'Software engineering': 'Services that stay up: limits, caches, queues, consistency.',
-  'Data leadership': 'Prioritising, promising and running data work.',
-}
-
 export default function Home() {
-  const live = CATEGORIES.filter((c) => modules.some((m) => m.category === c))
-  const planned = CATEGORIES.filter((c) => !live.includes(c))
+  const { tracks, modules, roles } = useCatalog()
+  const live = tracks.filter((t) => modules.some((m) => m.track === t.key))
+  const planned = tracks.filter((t) => !live.includes(t))
   return (
     <div className={styles.page}>
       <section className={styles.hero}>
@@ -34,7 +23,7 @@ export default function Home() {
             <strong>{live.length}</strong> tracks
           </div>
           <div>
-            <strong>{Object.keys(ROLES).length}</strong> role paths
+            <strong>{roles.length}</strong> role paths
           </div>
         </div>
         <div className={styles.heroActions}>
@@ -63,13 +52,13 @@ export default function Home() {
       </section>
 
       <div className={styles.trackGrid}>
-        {live.map((cat) => (
-          <section key={cat} className={styles.trackCard}>
-            <h2>{cat}</h2>
-            <p className={styles.trackBlurb}>{TRACK_BLURB[cat]}</p>
+        {live.map((t) => (
+          <section key={t.key} className={styles.trackCard}>
+            <h2>{t.title}</h2>
+            <p className={styles.trackBlurb}>{t.blurb}</p>
             <ul>
               {modules
-                .filter((m) => m.category === cat)
+                .filter((m) => m.track === t.key)
                 .map((m) => (
                   <li key={m.slug}>
                     <Link to={`/${m.slug}`}>{m.title}</Link>
@@ -79,12 +68,12 @@ export default function Home() {
             </ul>
           </section>
         ))}
-        {planned.map((cat) => (
-          <section key={cat} className={`${styles.trackCard} ${styles.planned}`}>
+        {planned.map((t) => (
+          <section key={t.key} className={`${styles.trackCard} ${styles.planned}`}>
             <h2>
-              {cat} <span className={styles.badge}>coming</span>
+              {t.title} <span className={styles.badge}>coming</span>
             </h2>
-            <p className={styles.trackBlurb}>{TRACK_BLURB[cat]}</p>
+            <p className={styles.trackBlurb}>{t.blurb}</p>
           </section>
         ))}
       </div>
@@ -92,9 +81,9 @@ export default function Home() {
       <section className={styles.roleStrip}>
         <h2>Paths by role</h2>
         <div>
-          {(Object.keys(ROLES) as Role[]).map((r) => (
-            <Link key={r} to={`/roles#${r}`}>
-              {ROLES[r]}
+          {roles.map((r) => (
+            <Link key={r.key} to={`/roles#${r.key}`}>
+              {r.title}
             </Link>
           ))}
         </div>

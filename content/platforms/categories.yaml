@@ -1,0 +1,18 @@
+# Capability categories, grouped into layers of a data platform.
+- {key: object-storage, name: Object storage, layer: store, order: 1, description: "Cheap, durable files (Parquet, CSV, JSON, images). The bottom layer of every lake and lakehouse."}
+- {key: table-format, name: Open table formats, layer: store, order: 2, description: "Turns folders of Parquet files into tables with ACID transactions, schema evolution and time travel (Iceberg, Delta, Hudi)."}
+- {key: warehouse, name: Data warehouse, layer: store, order: 3, description: "Managed columnar SQL engine plus storage, tuned for analytics on structured and semi-structured data."}
+- {key: operational-db, name: Operational databases, layer: store, order: 4, description: "OLTP databases behind applications: the usual sources for pipelines."}
+- {key: ingestion, name: Ingestion and CDC, layer: process, order: 5, description: "Managed connectors and change data capture that bring data in from databases and SaaS tools."}
+- {key: event-streaming, name: Event streaming, layer: process, order: 6, description: "Durable, partitioned logs of events (Kafka-style) that producers write and many consumers read."}
+- {key: stream-processing, name: Stream processing, layer: process, order: 7, description: "Computations over unbounded streams: windows, joins, aggregations with event time and watermarks."}
+- {key: batch-processing, name: Batch processing (Spark and friends), layer: process, order: 8, description: "Distributed compute for large transformations over files and tables."}
+- {key: transformation, name: SQL transformation, layer: process, order: 9, description: "Modelling in SQL with dependencies, tests and docs (the dbt layer)."}
+- {key: orchestration, name: Orchestration, layer: ops, order: 10, description: "Schedules and dependencies between jobs, retries, backfills and SLAs."}
+- {key: lake-query, name: Serverless SQL on the lake, layer: serve, order: 11, description: "Query files in object storage with SQL, without loading them into a warehouse first."}
+- {key: bi, name: BI and dashboards, layer: serve, order: 12, description: "Dashboards, semantic models and self-serve exploration."}
+- {key: catalog, name: Catalog and governance, layer: govern, order: 13, description: "Metadata, lineage, access control, tags and data quality across the platform."}
+- {key: ml-platform, name: ML platform, layer: ai, order: 14, description: "Training, experiment tracking, model registry, feature stores and serving."}
+- {key: genai, name: LLMs and generative AI, layer: ai, order: 15, description: "Hosted foundation models, prompting, fine-tuning and agent tooling."}
+- {key: vector-search, name: Vector search, layer: ai, order: 16, description: "Indexes over embeddings for semantic search and retrieval-augmented generation."}
+- {key: serverless-compute, name: Serverless functions and apps, layer: ops, order: 17, description: "Run small pieces of code or apps on demand, without managing servers."}

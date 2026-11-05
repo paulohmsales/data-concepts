@@ -1,0 +1,27 @@
+slug: partitioning
+title: Partitioning
+track: data-engineering
+summary: pruning, the function that disables it, small files and the hot key that stalls a job.
+roles:
+- de
+- ae
+lab: partitioning
+order: 4
+intuition: |
+  A big table on object storage is a pile of files. A query engine’s fastest trick is to not open most of them. **Partitioning** stores rows in folders by the value of a column (event_date=2026-03-28/…), so a query that filters on that column can skip whole folders from their names alone. That is **partition pruning**.
+
+  Pick the partition column by how the table is *queried*, usually by time, and at a granularity that gives files of a sensible size (hundreds of MB). Too coarse and every query reads extra data. Too fine and you get millions of tiny files, where opening them costs more than reading them. And the filter has to be written so the engine can see it’s about the partition column.
+check:
+- q: What is partition pruning, and what does a query need for it to work?
+  a: |-
+    The engine skips partitions whose partition values can’t match the filter, without opening their files. The query must filter directly on the partition column (or an expression the engine knows maps to it) with values it can evaluate at planning time.
+- q: How do you choose a partition column and granularity?
+  a: |-
+    By the most common, most selective filter (usually event date), at a granularity that yields reasonably large files (≈100 MB–1 GB) and not too many partitions. High-cardinality columns (user_id) go into clustering, sorting or bucketing, not folder partitions.
+- q: Why are many small files slow?
+  a: |-
+    Every file has fixed costs: listing, opening, reading footers and metadata, scheduling a task. With tiny files, that overhead dominates the actual reading. They also bloat table metadata and slow down planning and writes.
+- q: |-
+    A daily job’s aggregation takes 1 hour, but 15 of 16 tasks finish in 2 minutes. What do you suspect, and how do you fix it?
+  a: |-
+    Key skew: one key (a huge customer, or NULL/“unknown”) sends most rows to one task. Check row counts per key. Fix by filtering or handling the hot key separately, salting it into sub-keys and aggregating in two steps, or using the engine’s skew-join handling.

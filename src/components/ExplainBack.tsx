@@ -1,3 +1,4 @@
+import Markdown from './Markdown.tsx'
 import styles from './ExplainBack.module.css'
 
 export interface Question {
@@ -19,7 +20,7 @@ export default function ExplainBack({ questions }: { questions: Question[] }) {
             <p>{q}</p>
             <details>
               <summary>Reference answer</summary>
-              <p>{a}</p>
+              <Markdown md={a} />
             </details>
           </li>
         ))}

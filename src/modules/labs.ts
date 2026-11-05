@@ -1,0 +1,32 @@
+import { lazy, type ComponentType } from 'react'
+
+/**
+ * Interactive labs, by key. A module's content (in the database) names its lab with `lab: <key>`;
+ * everything else about the module (title, text, experiments, interview) comes from the API.
+ */
+export const labs: Record<string, ComponentType> = {
+  'clt': lazy(() => import('./clt/Clt.tsx')),
+  'confidence-intervals': lazy(() => import('./confidence-intervals/ConfidenceIntervals.tsx')),
+  'bootstrap': lazy(() => import('./bootstrap/Bootstrap.tsx')),
+  'simpsons-paradox': lazy(() => import('./simpsons/Simpsons.tsx')),
+  'regression-to-the-mean': lazy(() => import('./regression-to-mean/RegressionToMean.tsx')),
+  'ab-testing': lazy(() => import('./ab-testing/AbTesting.tsx')),
+  'multiple-comparisons': lazy(() => import('./multiple-comparisons/MultipleComparisons.tsx')),
+  'sample-ratio-mismatch': lazy(() => import('./srm/Srm.tsx')),
+  'cuped': lazy(() => import('./cuped/Cuped.tsx')),
+  'join-fanout': lazy(() => import('./join-fanout/JoinFanout.tsx')),
+  'window-functions': lazy(() => import('./window-functions/WindowFunctions.tsx')),
+  'surrogate-keys': lazy(() => import('./surrogate-keys/SurrogateKeys.tsx')),
+  'snapshots': lazy(() => import('./snapshots/Snapshots.tsx')),
+  'retries-idempotency': lazy(() => import('./retries/Retries.tsx')),
+  'late-data': lazy(() => import('./late-data/LateData.tsx')),
+  'partitioning': lazy(() => import('./partitioning/Partitioning.tsx')),
+  'cohorts': lazy(() => import('./cohorts/Cohorts.tsx')),
+  'funnels': lazy(() => import('./funnels/Funnels.tsx')),
+  'trend-seasonality': lazy(() => import('./seasonality/Seasonality.tsx')),
+  'bias-variance': lazy(() => import('./bias-variance/BiasVariance.tsx')),
+  'leakage': lazy(() => import('./leakage/Leakage.tsx')),
+  'gradient-descent': lazy(() => import('./gradient-descent/GradientDescent.tsx')),
+  'roc-thresholds': lazy(() => import('./roc/Roc.tsx')),
+  'class-imbalance': lazy(() => import('./class-imbalance/ClassImbalance.tsx')),
+}

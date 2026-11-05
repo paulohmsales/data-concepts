@@ -1,0 +1,41 @@
+# Tracks, in sidebar order. A track appears once it has a live module.
+- key: statistics
+  title: Statistics
+  blurb: What averages, intervals and samples can and can’t tell you.
+  order: 1
+- key: experimentation
+  title: Experimentation
+  blurb: 'Running tests that don’t lie: power, peeking, broken splits, variance.'
+  order: 2
+- key: analytics-engineering
+  title: Analytics engineering
+  blurb: Modelling the warehouse so every number has one meaning.
+  order: 3
+- key: data-engineering
+  title: Data engineering
+  blurb: 'Moving data reliably: loads, retries, late events, storage layout.'
+  order: 4
+- key: data-analysis
+  title: Data analysis
+  blurb: 'Reading behaviour over time: cohorts, funnels, seasons.'
+  order: 5
+- key: machine-learning
+  title: Machine learning
+  blurb: Training models that generalise, and choosing how to act on them.
+  order: 6
+- key: ai-engineering
+  title: AI engineering
+  blurb: 'Building on LLMs: retrieval, agents, evals, cost.'
+  order: 7
+- key: software-engineering
+  title: Software engineering
+  blurb: 'Services that stay up: limits, caches, queues, consistency.'
+  order: 8
+- key: data-leadership
+  title: Data leadership
+  blurb: Prioritising, promising and running data work.
+  order: 9
+- key: cloud-platforms
+  title: Cloud platforms
+  blurb: AWS, Google Cloud, Azure, Snowflake and Databricks, side by side.
+  order: 10

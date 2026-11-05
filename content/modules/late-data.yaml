@@ -1,0 +1,29 @@
+slug: late-data
+title: Late data and watermarks
+track: data-engineering
+summary: event time vs processing time, allowed lateness, dropped stragglers and the outage spike.
+roles:
+- de
+- swe
+lab: late-data
+order: 3
+intuition: |
+  Every event has two times: when it **happened** (event time: the tap on the phone) and when it **reached you** (processing time). Networks, retries and phones in airplane mode put a gap between them, and the gap varies. Events arrive out of order.
+
+  You want counts per minute of *event* time. But when can you publish “12:01 had 600 taps”? Something from 12:01 might still be on its way. A **watermark** is the pipeline’s running guess: “I’ve probably seen everything up to time W”. Here, W = latest event time seen − allowed lateness. When W passes a window’s end, the window is emitted, and stragglers for it are dropped (or sent to a correction path).
+
+  Allowed lateness is a dial between **fast** and **complete**. There is no setting that gives you both.
+check:
+- q: |-
+    What is the difference between event time and processing time, and which should a business metric use?
+  a: |-
+    Event time is when it happened; processing time is when the system saw it. Business metrics (“purchases per hour”) almost always want event time; processing time measures your pipeline, and it distorts metrics whenever delays change (outages, backfills, retries).
+- q: What is a watermark?
+  a: |-
+    A moving threshold of event time that says “events older than this have (probably) all arrived”. It lets a streaming system decide when a window is complete enough to emit. Here it is max event time seen minus an allowed lateness.
+- q: What do you trade when you increase allowed lateness?
+  a: |-
+    Completeness for latency (and memory: windows stay open longer). Fewer events are dropped, but every window’s result comes out later.
+- q: What happens to events that arrive after their window closed, and what can you do about them?
+  a: |-
+    By default they are dropped (or counted in no window). Options: allow longer lateness; emit updated results for the window (retractions/upserts downstream); send them to a side output and reconcile in a batch job that recomputes from event time.

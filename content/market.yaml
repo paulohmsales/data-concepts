@@ -1,0 +1,374 @@
+# Share of job posts (%) mentioning each skill, by title family. Aggregate counts from the jobz
+# job-board database; see PLAN.md §11 for the method.
+source: jobz job-board database (posts with a description)
+as_of: '2026-11-05'
+sample:
+  da: 2952
+  ae: 515
+  de: 2688
+  ds: 1203
+  mle: 873
+  ai: 1042
+  swe: 16000
+  mgr: 3328
+demand:
+  SQL:
+    da: 70
+    ae: 93
+    de: 80
+    ds: 68
+    mle: 20
+    ai: 19
+    swe: 21
+    mgr: 32
+  Python:
+    da: 43
+    ae: 70
+    de: 77
+    ds: 85
+    mle: 68
+    ai: 73
+    swe: 46
+    mgr: 27
+  Data modelling:
+    da: 24
+    ae: 76
+    de: 54
+    ds: 10
+    mle: 1
+    ai: 9
+    swe: 11
+    mgr: 14
+  dbt:
+    da: 13
+    ae: 71
+    de: 35
+    ds: 11
+    mle: 4
+    ai: 2
+    swe: 1
+    mgr: 8
+  Data quality:
+    da: 35
+    ae: 56
+    de: 54
+    ds: 14
+    mle: 22
+    ai: 38
+    swe: 27
+    mgr: 28
+  Governance:
+    da: 22
+    ae: 40
+    de: 44
+    ds: 13
+    mle: 11
+    ai: 20
+    swe: 8
+    mgr: 35
+  System design:
+    da: 19
+    ae: 53
+    de: 65
+    ds: 30
+    mle: 58
+    ai: 51
+    swe: 61
+    mgr: 37
+  Batch / ETL:
+    da: 12
+    ae: 36
+    de: 54
+    ds: 6
+    mle: 3
+    ai: 4
+    swe: 3
+    mgr: 8
+  Streaming:
+    da: 6
+    ae: 9
+    de: 33
+    ds: 17
+    mle: 28
+    ai: 23
+    swe: 22
+    mgr: 14
+  Spark:
+    da: 5
+    ae: 14
+    de: 43
+    ds: 19
+    mle: 19
+    ai: 4
+    swe: 5
+    mgr: 6
+  Databricks:
+    da: 9
+    ae: 28
+    de: 41
+    ds: 16
+    mle: 9
+    ai: 8
+    swe: 2
+    mgr: 9
+  Snowflake:
+    da: 12
+    ae: 51
+    de: 35
+    ds: 12
+    mle: 4
+    ai: 6
+    swe: 3
+    mgr: 12
+  BigQuery:
+    da: 8
+    ae: 35
+    de: 17
+    ds: 8
+    mle: 2
+    ai: 4
+    swe: 2
+    mgr: 5
+  AWS:
+    da: 7
+    ae: 17
+    de: 51
+    ds: 21
+    mle: 35
+    ai: 39
+    swe: 40
+    mgr: 14
+  GCP:
+    da: 5
+    ae: 15
+    de: 30
+    ds: 15
+    mle: 21
+    ai: 25
+    swe: 17
+    mgr: 9
+  Azure:
+    da: 8
+    ae: 12
+    de: 36
+    ds: 13
+    mle: 20
+    ai: 27
+    swe: 16
+    mgr: 10
+  Airflow:
+    da: 3
+    ae: 35
+    de: 34
+    ds: 7
+    mle: 12
+    ai: 3
+    swe: 2
+    mgr: 5
+  CI/CD:
+    da: 2
+    ae: 21
+    de: 39
+    ds: 9
+    mle: 20
+    ai: 32
+    swe: 30
+    mgr: 8
+  Statistics:
+    da: 39
+    ae: 10
+    de: 5
+    ds: 66
+    mle: 23
+    ai: 4
+    swe: 2
+    mgr: 15
+  A/B testing:
+    da: 16
+    ae: 10
+    de: 4
+    ds: 40
+    mle: 27
+    ai: 14
+    swe: 7
+    mgr: 15
+  Causal inference:
+    da: 2
+    ae: 2
+    de: 1
+    ds: 24
+    mle: 3
+    ai: 0
+    swe: 0
+    mgr: 3
+  Power BI:
+    da: 35
+    ae: 23
+    de: 11
+    ds: 8
+    mle: 1
+    ai: 1
+    swe: 1
+    mgr: 10
+  Tableau:
+    da: 32
+    ae: 25
+    de: 7
+    ds: 11
+    mle: 1
+    ai: 1
+    swe: 0
+    mgr: 12
+  Looker:
+    da: 17
+    ae: 28
+    de: 5
+    ds: 7
+    mle: 0
+    ai: 0
+    swe: 0
+    mgr: 6
+  Machine learning:
+    da: 8
+    ae: 17
+    de: 21
+    ds: 63
+    mle: 73
+    ai: 27
+    swe: 8
+    mgr: 19
+  MLOps:
+    da: 0
+    ae: 4
+    de: 8
+    ds: 20
+    mle: 35
+    ai: 17
+    swe: 2
+    mgr: 6
+  LLMs:
+    da: 9
+    ae: 20
+    de: 17
+    ds: 34
+    mle: 54
+    ai: 80
+    swe: 20
+    mgr: 29
+  RAG:
+    da: 1
+    ae: 3
+    de: 8
+    ds: 14
+    mle: 30
+    ai: 50
+    swe: 6
+    mgr: 10
+  Agents:
+    da: 12
+    ae: 28
+    de: 19
+    ds: 29
+    mle: 38
+    ai: 76
+    swe: 30
+    mgr: 38
+  Evals:
+    da: 9
+    ae: 9
+    de: 6
+    ds: 30
+    mle: 52
+    ai: 55
+    swe: 12
+    mgr: 22
+  Prompting:
+    da: 4
+    ae: 3
+    de: 4
+    ds: 14
+    mle: 21
+    ai: 46
+    swe: 8
+    mgr: 11
+  PyTorch / TF:
+    da: 0
+    ae: 0
+    de: 1
+    ds: 15
+    mle: 42
+    ai: 10
+    swe: 1
+    mgr: 2
+  APIs:
+    da: 35
+    ae: 42
+    de: 51
+    ds: 43
+    mle: 44
+    ai: 67
+    swe: 71
+    mgr: 42
+  Kubernetes:
+    da: 1
+    ae: 2
+    de: 10
+    ds: 2
+    mle: 18
+    ai: 17
+    swe: 28
+    mgr: 4
+  TypeScript:
+    da: 3
+    ae: 3
+    de: 6
+    ds: 3
+    mle: 6
+    ai: 38
+    swe: 47
+    mgr: 4
+  Stakeholders:
+    da: 64
+    ae: 59
+    de: 42
+    ds: 52
+    mle: 20
+    ai: 31
+    swe: 21
+    mgr: 59
+  Strategy:
+    da: 46
+    ae: 29
+    de: 25
+    ds: 45
+    mle: 34
+    ai: 33
+    swe: 20
+    mgr: 71
+  Roadmaps:
+    da: 10
+    ae: 13
+    de: 7
+    ds: 18
+    mle: 23
+    ai: 16
+    swe: 14
+    mgr: 43
+  KPIs / OKRs:
+    da: 20
+    ae: 15
+    de: 3
+    ds: 8
+    mle: 3
+    ai: 1
+    swe: 1
+    mgr: 15
+  Cost / budget:
+    da: 12
+    ae: 12
+    de: 11
+    ds: 16
+    mle: 11
+    ai: 17
+    swe: 11
+    mgr: 21

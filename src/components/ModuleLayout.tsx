@@ -1,56 +1,61 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router'
-import { moduleBySlug, neighbours, ROLES } from '../modules/registry.ts'
+import { Link } from 'react-router'
+import { useCatalog } from '../lib/api.ts'
+import { useModule } from '../lib/moduleContext.ts'
+import Blocks from './blocks/Blocks.tsx'
+import { Experiments, Interview } from './content.tsx'
+import ExplainBack from './ExplainBack.tsx'
+import Markdown from './Markdown.tsx'
 import styles from './ModuleLayout.module.css'
 
 interface Props {
-  title: string
-  /** Short plain-language framing (shown first in "Understand"). */
-  intuition: ReactNode
   /** The main interactive lab. */
   play: ReactNode
-  /** Guided ways to break it (shown right under the lab, same controls). */
-  breakIt: ReactNode
-  /** Optional self-check questions. */
-  explainBack: ReactNode
+  /** Lab-specific figures shown under the guided experiments (e.g. the peeking chart). */
+  breakIt?: ReactNode
   /** The lab's controls, shown beside the charts. */
   controls?: ReactNode
-  /** Mechanism, maths, worked example, production notes. */
+  /** Applies an experiment's `setup` parameters to the lab. */
+  onPreset?: (params: Record<string, unknown>) => void
+  /** @deprecated text now comes from the content API; kept so older labs still compile. */
+  title?: string
+  intuition?: ReactNode
+  explainBack?: ReactNode
   deepDive?: ReactNode
-  /** Interview questions with model answers. */
   interview?: ReactNode
 }
 
 /** Template v2: lab first, then experiments, understanding, interview prep and a self-check. */
-export default function ModuleLayout({ title, intuition, play, breakIt, explainBack, controls, deepDive, interview }: Props) {
-  const { pathname } = useLocation()
-  const slug = pathname.replace(/^\//, '')
-  const entry = moduleBySlug(slug)
-  const { prev, next } = neighbours(slug)
+export default function ModuleLayout({ play, breakIt, controls, onPreset }: Props) {
+  const m = useModule()
+  const { tracks, modules, roles } = useCatalog()
+  const track = tracks.find((t) => t.key === m.track)
+  const i = modules.findIndex((x) => x.slug === m.slug)
+  const prev = i > 0 ? modules[i - 1] : undefined
+  const next = i >= 0 && i < modules.length - 1 ? modules[i + 1] : undefined
+  const roleTitle = (k: string) => roles.find((r) => r.key === k)?.title ?? k
   const sections = [
     { id: 'lab', label: 'Lab' },
     { id: 'experiments', label: 'Experiments' },
     { id: 'understand', label: 'Understand' },
-    ...(interview ? [{ id: 'interview', label: 'Interview' }] : []),
-    { id: 'check', label: 'Check yourself' },
+    ...(m.interview.length ? [{ id: 'interview', label: 'Interview' }] : []),
+    ...(m.check.length ? [{ id: 'check', label: 'Check yourself' }] : []),
   ]
   const active = useScrollSpy(sections.map((s) => s.id))
 
   return (
     <article className={styles.module}>
       <header className={styles.header}>
-        {entry && (
-          <div className={styles.crumbs}>
-            <Link to="/">Tracks</Link> <span>/</span> {entry.category}
-          </div>
-        )}
-        <h1>{title}</h1>
-        {entry && <p className={styles.promise}>{entry.summary.charAt(0).toUpperCase() + entry.summary.slice(1)}</p>}
-        {entry && entry.roles.length > 0 && (
+        <div className={styles.crumbs}>
+          <Link to="/">Tracks</Link> <span>/</span> {track?.title}
+        </div>
+        <h1>{m.title}</h1>
+        <p className={styles.promise}>{m.summary.charAt(0).toUpperCase() + m.summary.slice(1)}</p>
+        {m.roles.length > 0 && (
           <div className={styles.roles}>
-            {entry.roles.map((r) => (
+            {m.roles.map((r) => (
               <Link key={r} to={`/roles#${r}`} className={styles.role}>
-                {ROLES[r]}
+                {roleTitle(r)}
               </Link>
             ))}
           </div>
@@ -72,6 +77,7 @@ export default function ModuleLayout({ title, intuition, play, breakIt, explainB
           </section>
           <section id="experiments" className={styles.experiments}>
             <h2>Experiments: break it on purpose</h2>
+            {m.experiments.length > 0 && <Experiments items={m.experiments} onPreset={onPreset} />}
             {breakIt}
           </section>
         </div>
@@ -85,29 +91,33 @@ export default function ModuleLayout({ title, intuition, play, breakIt, explainB
 
       <section id="understand" className={styles.text}>
         <h2>Understand</h2>
-        <div className={styles.intuition}>
-          <div className={styles.kicker}>The intuition</div>
-          {intuition}
-        </div>
-        {deepDive ? (
+        {m.intuition && (
+          <div className={styles.intuition}>
+            <div className={styles.kicker}>The intuition</div>
+            <Markdown md={m.intuition} />
+          </div>
+        )}
+        {m.deep_dive.length > 0 && (
           <div className={styles.deep}>
             <div className={styles.kicker}>Deep dive</div>
-            {deepDive}
+            <Blocks blocks={m.deep_dive} />
           </div>
-        ) : null}
+        )}
       </section>
 
-      {interview && (
+      {m.interview.length > 0 && (
         <section id="interview" className={styles.text}>
           <h2>Interview</h2>
-          {interview}
+          <Interview items={m.interview} />
         </section>
       )}
 
-      <section id="check" className={styles.text}>
-        <h2>Check yourself</h2>
-        {explainBack}
-      </section>
+      {m.check.length > 0 && (
+        <section id="check" className={styles.text}>
+          <h2>Check yourself</h2>
+          <ExplainBack questions={m.check} />
+        </section>
+      )}
 
       <nav className={styles.pager} aria-label="Previous and next module">
         {prev ? (

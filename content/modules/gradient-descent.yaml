@@ -1,0 +1,26 @@
+slug: gradient-descent
+title: Gradient descent
+track: machine-learning
+summary: learning rates that crawl or explode, narrow valleys, momentum and local minima.
+roles:
+- mle
+- ds
+lab: gradient-descent
+order: 3
+intuition: |
+  Training a model means finding the parameters with the lowest loss. Picture the loss as a landscape over the parameters. You can’t see the whole landscape, only the slope under your feet (the **gradient**). Gradient descent repeats one move: take a step downhill, sized by the **learning rate**.
+
+  Too small a step and you crawl. Too big and you overshoot the valley floor, land higher on the other side, and bounce out. When the valley is much steeper one way than the other (features on very different scales), the step that is safe for the steep direction is tiny for the shallow one, and the path zig-zags. **Momentum** keeps a running velocity so the zig-zags cancel and the steady direction builds up. And when the landscape has several valleys, where you start decides where you end.
+check:
+- q: Describe one step of gradient descent.
+  a: |-
+    Compute the gradient of the loss with respect to the parameters (the direction of steepest increase), then move the parameters a small amount in the opposite direction: w ← w − η·∇L(w).
+- q: Why does a too-large learning rate diverge rather than just converge faster?
+  a: |-
+    Along a direction with curvature c, a step multiplies the distance to the minimum by (1 − η·c). If η > 2/c that factor is below −1: each step overshoots to a point further away than before, so the error grows.
+- q: Why does feature scaling speed up training of linear models?
+  a: |-
+    Features on different scales make the loss surface a stretched valley (high condition number). The learning rate must suit the steepest direction, so the shallow directions move very slowly. Scaling makes curvatures similar, allowing a larger effective step everywhere.
+- q: What does momentum do?
+  a: |-
+    It accumulates a velocity: each update is the gradient step plus a fraction β of the previous update. Oscillating components cancel and consistent ones add up, which speeds progress along shallow, consistent directions and damps zig-zags.

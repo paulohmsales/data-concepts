@@ -1,0 +1,32 @@
+slug: clt
+title: Central limit theorem
+track: statistics
+summary: why averages are bell-shaped, how fast that kicks in, and when it never does.
+roles:
+- da
+- ds
+lab: clt
+order: 1
+intuition: |
+  Take any population, however lopsided: waiting times, incomes, “did this user buy?”. Draw a sample of **n** and average it. Do that thousands of times and look at the averages, not the draws. They pile up in a bell shape around the true mean, and the bell gets narrower as n grows.
+
+  That is the **central limit theorem**: averages of independent draws are approximately normal, centred on the population mean μ, with spread **σ/√n** (the standard error). It is why confidence intervals and A/B tests can use the normal curve even though nobody’s purchases are normally distributed.
+
+  Two catches. “Approximately” depends on how skewed the population is: a rare event needs far more than the folklore “n = 30”. And it needs a finite variance: for very heavy tails (the Cauchy below) averaging never settles down at all.
+check:
+- q: State the central limit theorem in one sentence without the word “normal” in the first half.
+  a: |-
+    If you average n independent draws from a population with finite mean μ and variance σ², the average’s sampling distribution gets closer and closer to a normal centred on μ with standard deviation σ/√n as n grows, whatever the population’s shape.
+- q: Why does the standard error shrink with √n and not with n?
+  a: |-
+    Variances of independent draws add: the sum of n draws has variance nσ², so the mean (sum ÷ n) has variance σ²/n and SD σ/√n. Errors partly cancel rather than all lining up, which is why 4× the data only halves the uncertainty.
+- q: |-
+    Your data are hugely skewed (revenue per user). Is the CLT still useful? What should you watch out for?
+  a: |-
+    Yes for the mean, eventually: the sample mean still tends to normal, but skew fades only as skew/√n, so you may need thousands of users, and a few whales dominate. Check by simulation or bootstrap, consider trimming/winsorising or a log transform (which changes the question), and report medians alongside.
+- q: Why does averaging Cauchy draws never converge?
+  a: |-
+    The Cauchy has tails so heavy that its mean and variance don’t exist; the average of n Cauchy draws is itself exactly Cauchy with the same spread. The CLT’s finite-variance assumption fails, so no amount of data narrows the average. Medians still work.
+- q: Does the CLT say that a large sample of data looks normal?
+  a: |-
+    No. The raw data keep the population’s shape however many you draw (the top chart never changes). The CLT is about the distribution of a statistic (the mean) across repeated samples.

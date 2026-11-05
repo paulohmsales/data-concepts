@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { moduleBySlug } from '../modules/registry.ts'
+import { useCatalog } from '../lib/api.ts'
+import type { ExperimentContent, InterviewContent } from '../lib/content.ts'
+import Markdown from './Markdown.tsx'
 import styles from './content.module.css'
 
 /** A displayed formula (plain Unicode maths, monospace). */
@@ -53,6 +55,8 @@ export function Steps({ items }: { items: { title: string; body: ReactNode }[] }
 
 /** Links to other modules by slug. */
 export function Related({ slugs }: { slugs: string[] }) {
+  const { modules } = useCatalog()
+  const moduleBySlug = (s: string) => modules.find((m) => m.slug === s)
   return (
     <div className={styles.related}>
       <span>Related:</span>
@@ -68,61 +72,52 @@ export function Related({ slugs }: { slugs: string[] }) {
   )
 }
 
-export interface Experiment {
-  title: string
-  /** What you're trying to show. */
-  goal: ReactNode
-  /** Configures the lab for this experiment. */
-  setup?: () => void
-  /** What to look at once it's set up. */
-  look: ReactNode
-  /** The explanation, revealed on demand. */
-  why: ReactNode
-}
-
-/** Guided experiments: set it up, look, then reveal why. */
-export function Experiments({ items }: { items: Experiment[] }) {
+/** Guided experiments from content: set it up (via the lab's preset handler), look, then reveal why. */
+export function Experiments({ items, onPreset }: { items: ExperimentContent[]; onPreset?: (params: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState<number | null>(null)
+  const [active, setActive] = useState<number | null>(null)
   return (
     <ol className={styles.experiments}>
       {items.map((e, i) => (
-        <li key={e.title} className={styles.experiment}>
+        <li key={e.title} className={`${styles.experiment} ${active === i ? styles.expActive : ''}`}>
           <div className={styles.expHead}>
             <span className={styles.expNum}>{i + 1}</span>
             <div className={styles.expBody}>
               <strong>{e.title}</strong>
-              <p>{e.goal}</p>
+              <Markdown md={e.goal} />
             </div>
-            {e.setup && (
-              <button type="button" className={styles.setup} onClick={e.setup}>
-                Set it up
+            {e.setup && onPreset && (
+              <button
+                type="button"
+                className={styles.setup}
+                onClick={() => {
+                  onPreset(e.setup!)
+                  setActive(i)
+                }}
+              >
+                {active === i ? 'Set up ✓' : 'Set it up'}
               </button>
             )}
           </div>
           <div className={styles.look}>
-            <span>Look for</span> {e.look}
+            <span>Look for</span> <Markdown md={e.look} inline />
           </div>
           <button type="button" className={styles.whyToggle} onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}>
             {open === i ? 'Hide why' : 'Why does this happen?'}
           </button>
-          {open === i && <div className={styles.why}>{e.why}</div>}
+          {open === i && (
+            <div className={styles.why}>
+              <Markdown md={e.why} />
+            </div>
+          )}
         </li>
       ))}
     </ol>
   )
 }
 
-export interface InterviewQuestion {
-  q: string
-  level: 'junior' | 'mid' | 'senior' | 'staff'
-  answer: ReactNode
-  /** What interviewers listen for. */
-  listenFor: string[]
-  followUps?: { q: string; a: ReactNode }[]
-}
-
 /** Interview questions with a model answer, follow-ups and what a strong answer includes. */
-export function Interview({ items }: { items: InterviewQuestion[] }) {
+export function Interview({ items }: { items: InterviewContent[] }) {
   return (
     <div className={styles.interview}>
       <p className={styles.interviewIntro}>
@@ -137,20 +132,20 @@ export function Interview({ items }: { items: InterviewQuestion[] }) {
           </summary>
           <div className={styles.answer}>
             <div className={styles.answerLabel}>A strong answer</div>
-            {it.answer}
+            <Markdown md={it.answer} />
             <div className={styles.answerLabel}>Interviewers listen for</div>
             <ul className={styles.listen}>
-              {it.listenFor.map((l) => (
+              {it.listen_for.map((l) => (
                 <li key={l}>✓ {l}</li>
               ))}
             </ul>
-            {it.followUps && (
+            {it.follow_ups.length > 0 && (
               <>
                 <div className={styles.answerLabel}>Follow-ups</div>
-                {it.followUps.map((f) => (
+                {it.follow_ups.map((f) => (
                   <div key={f.q} className={styles.followUp}>
                     <strong>{f.q}</strong>
-                    <div>{f.a}</div>
+                    <Markdown md={f.a} />
                   </div>
                 ))}
               </>

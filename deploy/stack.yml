@@ -19,6 +19,26 @@ services:
         traefik.http.middlewares.data-concepts-auth.basicauth.users: ${BASIC_AUTH_USERS}
         traefik.http.services.data-concepts.loadbalancer.server.port: "8080"
 
+  api:
+    image: ${API_IMAGE}
+    networks: [network_swarm_public]
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+      resources:
+        limits:
+          memory: 256M
+      labels:
+        traefik.enable: "true"
+        traefik.docker.network: network_swarm_public
+        traefik.http.routers.data-concepts-api.rule: Host(`${DOMAIN}`) && PathPrefix(`/api`)
+        traefik.http.routers.data-concepts-api.priority: "100"
+        traefik.http.routers.data-concepts-api.entrypoints: websecure
+        traefik.http.routers.data-concepts-api.tls.certresolver: letsencryptresolver
+        traefik.http.routers.data-concepts-api.middlewares: data-concepts-auth
+        traefik.http.services.data-concepts-api.loadbalancer.server.port: "8000"
+
 networks:
   network_swarm_public:
     external: true

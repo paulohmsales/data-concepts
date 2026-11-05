@@ -1,0 +1,139 @@
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.steps li {
+  display: flex;
+  gap: 0.8rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.steps li:first-child {
+  border-top: none;
+}
+
+.num {
+  flex: 0 0 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.code {
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+.code pre {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.code code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.lang {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 0.35rem 1rem 0;
+}
+
+.code figcaption,
+.visual figcaption {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 0.5rem 1rem 0.7rem;
+}
+
+.visual {
+  margin: 1.25rem 0;
+  padding: 1rem 1.1rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.visual figcaption {
+  padding: 0.4rem 0 0.8rem;
+}
+
+.loading,
+.missing {
+  color: var(--muted);
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.stepper {
+  margin: 1.25rem 0;
+}
+
+.stepper .visual {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.stepNav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-top: none;
+  background: var(--surface-2);
+}
+
+.dots {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.dot,
+.dotOn {
+  width: 0.7rem;
+  height: 0.7rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.dotOn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.stepCount {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stepText {
+  padding: 0.8rem 1.1rem 1rem;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface);
+}

@@ -2,12 +2,8 @@ import { useState } from 'react'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import Slider from '../../components/Slider.tsx'
 import AsOfTable from './AsOfTable.tsx'
-import ExplainBack from './ExplainBack.tsx'
-import Intuition from './Intuition.tsx'
 import type { View } from './sandbox.ts'
 import { scenarios, type Scenario } from './scenarios.ts'
-import DeepDive from './DeepDive.tsx'
-import InterviewQs from './InterviewQs.tsx'
 import SourceTable from './SourceTable.tsx'
 import SqlLog from './SqlLog.tsx'
 import TargetTable from './TargetTable.tsx'
@@ -38,7 +34,7 @@ export default function Snapshots() {
       await s.reset()
       await sc.run(s)
     }, sc.asOf)
-    document.getElementById('play')?.scrollIntoView({ behavior: 'smooth' })
+    document.getElementById('lab')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const controls = (
@@ -147,35 +143,18 @@ export default function Snapshots() {
   )
 
   const breakIt = (
-    <>
-      <p>
-        Each scenario resets the sandbox, runs a short script, and leaves the result in the tables
-        above. Read the action log to see each step and the SQL it ran.
-      </p>
-      <div className={styles.scenarios}>
-        {scenarios.map((sc) => (
-          <div key={sc.id} className={styles.scenario}>
-            <strong>{sc.title}</strong>
-            <p>{sc.setup}</p>
-            <button type="button" disabled={busy || !view} onClick={() => runScenario(sc)}>
-              Run scenario
-            </button>
-          </div>
-        ))}
-      </div>
-    </>
+    <p className="lede">
+      Each scenario resets the sandbox, runs a short script and leaves the result in the tables above.
+      Read the action log to see each step and the SQL it ran.
+    </p>
   )
 
+  const onPreset = (p: Record<string, unknown>) => {
+    const sc = scenarios.find((x) => x.id === p.scenario)
+    if (sc) runScenario(sc)
+  }
+
   return (
-    <ModuleLayout
-      title="Snapshots and incremental loads"
-      controls={controls}
-      intuition={<Intuition />}
-      play={play}
-      breakIt={breakIt}
-      deepDive={<DeepDive />}
-      interview={<InterviewQs />}
-      explainBack={<ExplainBack />}
-    />
+    <ModuleLayout controls={controls} play={play} breakIt={breakIt} onPreset={onPreset} />
   )
 }

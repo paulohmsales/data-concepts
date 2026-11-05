@@ -1,0 +1,21 @@
+# Approximate public list prices (US regions, on-demand), cross-checked against several 2026 pricing
+# summaries on 2026-11-05. Prices change and vary by region, edition and contract: check the source
+# page before budgeting. Used by the cost explorer on /platforms.
+- {provider: aws, item: Athena query, unit: TB scanned, usd: 5.0, source: "https://aws.amazon.com/athena/pricing/", as_of: "2026-11", note: "10 MB minimum per query"}
+- {provider: aws, item: Redshift Serverless, unit: RPU-hour, usd: 0.375, source: "https://aws.amazon.com/redshift/pricing/", as_of: "2026-11", note: "us-east-1; 4–8 RPU minimum; per-second billing, 60 s minimum"}
+- {provider: aws, item: S3 Standard storage, unit: GB-month, usd: 0.023, source: "https://aws.amazon.com/s3/pricing/", as_of: "2026-11", note: "first 50 TB, us-east-1"}
+- {provider: gcp, item: BigQuery on-demand query, unit: TiB scanned, usd: 6.25, source: "https://cloud.google.com/bigquery/pricing", as_of: "2026-11", note: "first 1 TiB per month free"}
+- {provider: gcp, item: BigQuery active storage, unit: GB-month, usd: 0.02, source: "https://cloud.google.com/bigquery/pricing", as_of: "2026-11", note: "logical bytes, US multi-region; long-term storage about half"}
+- {provider: gcp, item: Cloud Storage Standard, unit: GB-month, usd: 0.02, source: "https://cloud.google.com/storage/pricing", as_of: "2026-11", note: "us-central1"}
+- {provider: azure, item: Fabric capacity F2, unit: hour, usd: 0.36, source: "https://azure.microsoft.com/pricing/details/microsoft-fabric/", as_of: "2026-11", note: "pay-as-you-go; F64 and above include Power BI viewing for free users"}
+- {provider: azure, item: Synapse serverless SQL, unit: TB processed, usd: 5.0, source: "https://azure.microsoft.com/pricing/details/synapse-analytics/", as_of: "2026-11", note: ""}
+- {provider: azure, item: ADLS Gen2 hot storage, unit: GB-month, usd: 0.019, source: "https://azure.microsoft.com/pricing/details/storage/data-lake/", as_of: "2026-11", note: "LRS, approximate"}
+- {provider: snowflake, item: Credit (Standard edition), unit: credit, usd: 2.0, source: "https://www.snowflake.com/pricing/", as_of: "2026-11", note: "AWS US East on-demand; Enterprise about 3.00"}
+- {provider: snowflake, item: X-Small warehouse, unit: credits per hour, usd: 1.0, source: "https://docs.snowflake.com/en/user-guide/warehouses-overview", as_of: "2026-11", note: "each size up doubles; Gen2 warehouses use about 1.35×"}
+- {provider: snowflake, item: Storage, unit: TB-month, usd: 23.0, source: "https://www.snowflake.com/pricing/", as_of: "2026-11", note: "capacity contract; on-demand about 40"}
+- {provider: databricks, item: SQL Serverless, unit: DBU, usd: 0.70, source: "https://www.databricks.com/product/pricing/databricks-sql", as_of: "2026-11", note: "AWS US, Premium; includes the machines"}
+- {provider: databricks, item: 2X-Small SQL warehouse, unit: DBUs per hour, usd: 4.0, source: "https://docs.databricks.com/aws/en/compute/sql-warehouse/warehouse-behavior", as_of: "2026-11", note: "2X-Small 4, X-Small 6, Small 12, Medium 24, Large 40"}
+- {provider: databricks, item: Jobs compute (classic), unit: DBU, usd: 0.15, source: "https://www.databricks.com/product/pricing", as_of: "2026-11", note: "Premium; plus the cloud VMs"}
+- {provider: aws, item: Redshift managed storage, unit: GB-month, usd: 0.024, source: "https://aws.amazon.com/redshift/pricing/", as_of: "2026-11", note: "RA3 and serverless"}
+- {provider: azure, item: OneLake storage, unit: GB-month, usd: 0.023, source: "https://azure.microsoft.com/pricing/details/microsoft-fabric/", as_of: "2026-11", note: "approximate"}
+- {provider: aws, item: Redshift Serverless base capacity, unit: RPU, usd: 8, source: "https://docs.aws.amazon.com/redshift/latest/mgmt/serverless-capacity.html", as_of: "2026-11", note: "default base; can be set as low as 4 in some regions"}

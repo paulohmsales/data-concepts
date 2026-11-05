@@ -5,10 +5,12 @@ import { MenuIcon, MoonIcon, SearchIcon, SunIcon } from './components/shell/icon
 import Sidebar from './components/shell/Sidebar.tsx'
 import styles from './components/shell/Shell.module.css'
 import { setTheme, useTheme } from './lib/theme.ts'
-import { modules } from './modules/registry.ts'
+import ErrorBoundary from './components/ErrorBoundary.tsx'
 import Home from './pages/Home.tsx'
 
 const Roles = lazy(() => import('./pages/Roles.tsx'))
+const Platforms = lazy(() => import('./pages/Platforms.tsx'))
+const ModulePage = lazy(() => import('./pages/ModulePage.tsx'))
 const Integrations = lazy(() => import('./pages/Integrations.tsx'))
 
 export default function App() {
@@ -50,6 +52,7 @@ export default function App() {
         </button>
         <nav className={styles.topLinks}>
           <Link to="/roles">Roles</Link>
+          <Link to="/platforms">Platforms</Link>
           <Link to="/integrations">Integrations</Link>
         </nav>
         <button
@@ -63,24 +66,30 @@ export default function App() {
       </header>
       <div className={styles.body}>
         <div className={`${styles.sideWrap} ${menu ? styles.sideOpen : ''}`}>
-          <Sidebar onNavigate={() => setMenu(false)} />
+          <Suspense fallback={null}>
+            <Sidebar onNavigate={() => setMenu(false)} />
+          </Suspense>
         </div>
         {menu && <div className={styles.scrim} onClick={() => setMenu(false)} />}
         <main className={styles.main}>
-          <Suspense fallback={<p className="lede">Loading…</p>}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/roles" element={<Roles />} />
-              <Route path="/integrations" element={<Integrations />} />
-              {modules.map((m) => (
-                <Route key={m.slug} path={`/${m.slug}`} element={<m.Component />} />
-              ))}
-              <Route path="*" element={<p>Not found.</p>} />
-            </Routes>
-          </Suspense>
+          <ErrorBoundary key={pathname}>
+            <Suspense fallback={<p className="lede">Loading…</p>}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/roles" element={<Roles />} />
+                <Route path="/platforms" element={<Platforms />} />
+                <Route path="/integrations" element={<Integrations />} />
+                <Route path="/:slug" element={<ModulePage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
-      {palette && <CommandPalette onClose={() => setPalette(false)} />}
+      {palette && (
+        <Suspense fallback={null}>
+          <CommandPalette onClose={() => setPalette(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }

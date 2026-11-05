@@ -1,0 +1,181 @@
+# Role briefs: shown on /roles and used for role chips on modules.
+- key: da
+  title: Data analyst
+  what: 'Turns questions into numbers people trust and act on: defines metrics, queries, analyses, explains.'
+  ic:
+  - 'Analyst: reliable SQL, clean charts, answers well-posed questions'
+  - 'Senior: frames the question, picks the method, pushes back on bad metrics'
+  - 'Staff/principal: owns a domain’s metrics and decision process, teaches the org'
+  manager:
+  - 'Analytics manager: prioritises requests, sets standards, hires'
+  - 'Head of analytics: metric strategy, self-serve, partnership with product and finance'
+  interviews:
+  - SQL live (joins, windows, gaps and islands)
+  - 'Metric design: “how would you measure success of X?”'
+  - 'Product case: a metric dropped 10%, investigate'
+  - A/B test reading and pitfalls
+  - Communicating to non-technical stakeholders
+  planned:
+  - KPI design and metric trees
+  - Causal inference without an experiment
+  - 'SQL patterns: gaps and islands, sessionisation'
+  - Dashboard design
+- key: ae
+  title: Analytics engineer
+  what: 'Builds the modelled, tested, documented layer between raw data and every dashboard: the warehouse’s source
+    of truth.'
+  ic:
+  - 'AE: dbt models with tests, clear grain, documented'
+  - 'Senior: designs the dimensional model and conventions, CI for data'
+  - 'Staff: semantic layer, contracts with producers, cost and performance across the warehouse'
+  manager:
+  - 'AE manager: modelling standards, review culture, roadmap with analysts'
+  - 'Head of data platform/analytics engineering: tooling, governance, build vs buy'
+  interviews:
+  - SQL and window functions
+  - Model this business as facts and dimensions
+  - Incremental vs full refresh; materializations
+  - SCD2 with snapshots
+  - 'A test failed in production: what now?'
+  - Take-home dbt project
+  planned:
+  - Dimensional modelling (facts, dims, SCD 1/2/3/6)
+  - dbt in practice (DAG, incremental strategies, tests, CI)
+  - Data quality, contracts and observability
+  - Semantic layer and metric definitions
+- key: de
+  title: Data engineer
+  what: 'Moves, stores and serves data reliably at scale: ingestion, pipelines, storage formats, streaming, platform.'
+  ic:
+  - 'DE: builds and operates pipelines; idempotent, tested, monitored'
+  - 'Senior: designs systems with clear trade-offs (freshness, cost, correctness)'
+  - 'Staff: platform architecture, multi-team standards, incident and cost ownership'
+  manager:
+  - 'DE manager: delivery, on-call health, SLAs, hiring'
+  - 'Director of data platform: strategy, budgets, vendor choices, org design'
+  interviews:
+  - 'System design: clickstream, surge pricing, CDC into a lakehouse'
+  - Incremental loads without change columns
+  - SCD2 on a full daily extract
+  - Slow/costly Spark joins, skew
+  - Streaming checkpoints and late data
+  - Deploying across environments; 10,000 API calls in Python
+  planned:
+  - DE system design board
+  - Orchestration (DAGs, backfills, SLAs)
+  - Streaming internals (Kafka, offsets, exactly-once)
+  - Spark execution (shuffles, joins, skew)
+  - Lakehouse formats and medallion layers
+  - CDC
+  - Ingesting from APIs at scale
+- key: ds
+  title: Data scientist
+  what: Uses statistics, experiments and models to answer causal and predictive questions.
+  ic:
+  - 'DS: sound analyses and experiments'
+  - 'Senior: chooses methods, designs experimentation programs'
+  - 'Staff: org-wide methodology, decision science'
+  manager:
+  - 'DS manager: portfolio of problems, review of methods, hiring'
+  - 'Head of data science: strategy, experimentation platform, ethics'
+  interviews:
+  - Probability and statistics fundamentals
+  - Experiment design and analysis
+  - Causal inference
+  - ML modelling case
+  - Product sense
+  planned:
+  - Sequential testing
+  - Interference and switchback tests
+  - Causal inference (DiD, synthetic control, RDD)
+  - Bayesian A/B
+- key: mle
+  title: ML engineer
+  what: 'Ships models to production and keeps them working: training pipelines, serving, monitoring.'
+  ic:
+  - 'MLE: trains, evaluates and deploys models'
+  - 'Senior: ML system design, monitoring and retraining'
+  - 'Staff: ML platform, evaluation standards'
+  manager:
+  - 'ML engineering manager: roadmap, reliability, hiring'
+  - 'Head of ML: platform strategy, build vs buy'
+  interviews:
+  - ML system design (recommendations, fraud)
+  - Evaluation and leakage
+  - Training at scale, serving latency
+  - Monitoring and drift
+  - LLM fine-tuning vs RAG
+  planned:
+  - Model monitoring and drift
+  - Time-series cross-validation
+  - Calibration
+  - Feature stores
+- key: ai
+  title: AI / LLM engineer
+  what: 'Builds products on top of LLMs: retrieval, agents, evaluation, cost and safety.'
+  ic:
+  - 'AI engineer: prompt, RAG and tool-calling features with evals'
+  - 'Senior: system design for LLM apps, eval strategy, cost/latency'
+  - 'Staff: platform for evals, guardrails, model choice across the org'
+  manager:
+  - 'AI engineering manager: roadmap, eval quality bar, vendor/model strategy'
+  interviews:
+  - Design a RAG system; chunking and retrieval choices
+  - Model evals vs system evals
+  - Agent vs chain; tool-use failure modes
+  - Cost, latency, hallucination handling
+  - Prompt vs RAG vs fine-tune
+  planned:
+  - Tokens, context, cost and latency
+  - Embeddings and vector search
+  - RAG end to end
+  - Evals
+  - Agents and tool use
+  - Structured output and prompting
+  - Guardrails and prompt injection
+- key: swe
+  title: Software engineer
+  what: 'Builds and runs software systems: APIs, services, storage, reliability.'
+  ic:
+  - 'SWE: correct, tested code'
+  - 'Senior: designs services, owns reliability'
+  - 'Staff: cross-team architecture'
+  manager:
+  - 'Engineering manager: delivery, people, process'
+  - 'Director: org design, strategy'
+  interviews:
+  - Coding
+  - System design
+  - APIs, concurrency, caching, queues
+  - Databases and indexes
+  - Behavioural
+  planned:
+  - Rate limiting and backoff with jitter
+  - Caching
+  - Queues and backpressure (Little’s law)
+  - Indexes and query plans
+  - Replication and consistency
+  - Tail latency
+- key: mgr
+  title: Data manager / lead
+  what: 'Leads data people and platforms: strategy, prioritisation, quality bar, stakeholders, budget.'
+  ic:
+  - '(IC leadership) Staff/principal: sets technical direction without managing'
+  manager:
+  - 'Lead/manager: a team’s delivery, quality and growth'
+  - 'Senior manager/director: several teams, roadmap, budget'
+  - 'Head/VP of data: strategy, org design, executive partnership'
+  interviews:
+  - Data strategy for a company
+  - Prioritising competing requests
+  - Ensuring quality across pipelines; SLAs
+  - Compliance and PII
+  - Leading a project end to end; handling a failed one
+  - Hiring and growing people
+  planned:
+  - Prioritisation (cost of delay)
+  - SLAs, SLOs and error budgets for data
+  - Incident management and postmortems
+  - Team topologies
+  - Build vs buy
+  - Governance and PII

@@ -1,0 +1,26 @@
+slug: surrogate-keys
+title: Surrogate keys
+track: analytics-engineering
+summary: row_number keys that reassign your facts, and hash keys that collide on NULLs and concat.
+roles:
+- ae
+- de
+lab: surrogate-keys
+order: 3
+intuition: |
+  A **natural key** comes from the business: an email, an order number, a SKU. A **surrogate key** is one the warehouse makes up, so facts can point at dimension rows with a single, uniform, joinable column, even when the natural key is long, composite, or arrives in different formats from different systems.
+
+  The one property that matters is **stability**: the same entity must get the same key every time the model is rebuilt. Otherwise every fact table that stored the old key now points at someone else. A key computed from the row’s own natural key (a hash) is stable. A key that depends on what else is in the table (row_number, an auto-increment in a rebuilt table) is not.
+check:
+- q: Why do warehouses use surrogate keys at all, instead of joining on natural keys?
+  a: |-
+    One uniform join column regardless of how many natural-key parts there are; a key that stays the same when natural keys are reformatted or merged across systems; and, with SCD2, one key per version of an entity (the natural key repeats across versions).
+- q: Why is row_number() a dangerous surrogate key?
+  a: |-
+    It depends on the whole table’s contents and ordering at build time. A new or deleted row shifts the numbers, so facts loaded earlier now reference different entities. Nothing errors; the attribution is just wrong.
+- q: What are the pitfalls of md5(col_a || col_b)?
+  a: |-
+    Boundary collisions (“ab”+“c” = “a”+“bc”), NULLs making the key NULL (or collapsing with concat_ws), and type/format differences changing the hash. Cast, coalesce NULLs to a marker, join with a separator, and normalise formats first.
+- q: 'Hash collisions in md5: should you worry?'
+  a: |-
+    Not from random chance at warehouse scale (128 bits: you’d need ~10¹⁹ keys for a realistic collision chance). Worry about the input string collisions above, and keep a uniqueness test on the key.

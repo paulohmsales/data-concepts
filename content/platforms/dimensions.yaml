@@ -1,0 +1,91 @@
+# How the main analytics engines differ. One value per provider; keep each value short.
+- key: architecture
+  name: Architecture
+  why: Decides what you size, what scales on its own, and where the data physically lives.
+  values:
+    aws: "Redshift: MPP cluster (RA3 nodes or serverless RPUs) with storage on S3; Athena: serverless Trino over S3."
+    gcp: "BigQuery: fully serverless, storage (Colossus) and compute (slots) separated; no cluster at all."
+    azure: "Fabric: one capacity shared by warehouse, Spark and BI, all over OneLake (Delta)."
+    snowflake: "Shared storage with any number of independent virtual warehouses (compute clusters) on top."
+    databricks: "Lakehouse: compute clusters and SQL warehouses over Delta tables in your own object storage."
+- key: compute-unit
+  name: What you pay compute in
+  why: Every cost conversation starts by translating workload into this unit.
+  values:
+    aws: "Redshift Serverless RPU-hours (or node-hours); Athena TB scanned."
+    gcp: "TiB scanned (on-demand) or slot-hours (editions)."
+    azure: "Capacity units (F SKUs) per hour, shared across workloads."
+    snowflake: "Credits per second while a warehouse runs; size doubles credits."
+    databricks: "DBUs per hour by compute type and size, plus cloud VMs on classic compute."
+- key: idle-cost
+  name: Cost when idle
+  why: Bursty analytics workloads are idle most of the day.
+  values:
+    aws: "Serverless and Athena: none. Provisioned clusters: full price unless paused."
+    gcp: "On-demand: none. Reserved slots: you pay for the capacity."
+    azure: "A running capacity bills per hour whether used or not; pause it to stop."
+    snowflake: "None once a warehouse auto-suspends (as short as 60 s)."
+    databricks: "Serverless: none. Classic clusters: until auto-termination."
+- key: scaling
+  name: Scaling and concurrency
+  why: Many users hitting dashboards at 9 am is a different problem from one big job.
+  values:
+    aws: "Serverless scales RPUs automatically; concurrency scaling adds clusters for bursts."
+    gcp: "Slots are shared and allocated per query; autoscaling editions add slots."
+    azure: "Bursting and smoothing within the capacity; throttles when it’s exhausted."
+    snowflake: "Scale up (bigger warehouse) for heavy queries, scale out (multi-cluster) for concurrency."
+    databricks: "SQL warehouses autoscale clusters for concurrency; jobs clusters autoscale workers."
+- key: storage
+  name: Storage format
+  why: Determines who else can read the data, and how locked in you are.
+  values:
+    aws: "Redshift managed storage (proprietary); Iceberg/Parquet on S3 for Athena and EMR."
+    gcp: "BigQuery native storage (Capacitor); Iceberg through BigLake."
+    azure: "Delta Parquet in OneLake for everything in Fabric."
+    snowflake: "Proprietary micro-partitions by default; Iceberg tables when you want open files."
+    databricks: "Delta Lake (open) by default; UniForm adds Iceberg metadata."
+- key: governance
+  name: Governance and catalog
+  why: Access control, lineage and discovery are where platforms differ most in practice.
+  values:
+    aws: "Glue Data Catalog plus Lake Formation permissions; SageMaker Catalog for business metadata."
+    gcp: "IAM plus Dataplex Universal Catalog (lineage, quality, policy tags)."
+    azure: "Microsoft Purview plus Entra ID; Fabric workspaces and OneLake security."
+    snowflake: "Horizon: RBAC, masking and row policies, tags, lineage, all in SQL."
+    databricks: "Unity Catalog: one permission model for tables, files, models and functions."
+- key: streaming
+  name: Streaming into the warehouse
+  why: Freshness requirements (seconds vs hours) decide the ingestion design.
+  values:
+    aws: "Kinesis/MSK, then Firehose or Redshift streaming ingestion; Flink for processing."
+    gcp: "Pub/Sub, then Dataflow or BigQuery subscriptions and the Storage Write API."
+    azure: "Event Hubs, then Eventstreams and Eventhouse in Fabric."
+    snowflake: "Snowpipe Streaming from Kafka or SDKs; dynamic tables for continuous transforms."
+    databricks: "Structured Streaming and declarative pipelines from Kafka, Kinesis or Event Hubs."
+- key: ai
+  name: AI inside the platform
+  why: Increasingly the reason a platform gets chosen.
+  values:
+    aws: "Bedrock for models and agents; SageMaker for custom ML."
+    gcp: "Gemini and Vertex AI; BigQuery ML and AI functions in SQL."
+    azure: "Azure AI Foundry with OpenAI models; Copilot across Fabric and Power BI."
+    snowflake: "Cortex AI: LLM functions, search, text-to-SQL and agents in SQL."
+    databricks: "Mosaic AI: model serving, vector search, agent framework and evaluation."
+- key: multi-cloud
+  name: Multi-cloud
+  why: Matters for companies with data on more than one cloud, or that fear lock-in.
+  values:
+    aws: "AWS only."
+    gcp: "GCP, with BigQuery Omni querying data in S3 and Azure."
+    azure: "Azure, with OneLake shortcuts to S3 and GCS."
+    snowflake: "Runs on AWS, Azure and GCP, with cross-cloud replication and sharing."
+    databricks: "Runs on AWS, Azure and GCP; open formats travel between them."
+- key: ops
+  name: What you operate
+  why: "The hidden cost: people time."
+  values:
+    aws: "Most assembly: many services, IAM wiring, cluster choices."
+    gcp: "Little: serverless by default."
+    azure: "Little inside Fabric; more across separate Azure services."
+    snowflake: "Very little: no indexes, vacuum or clusters to tune by hand."
+    databricks: "Moderate: cluster policies, file layout (OPTIMIZE) and jobs; less with serverless."

@@ -1,13 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Experiments } from '../../components/content.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import Slider from '../../components/Slider.tsx'
 import { int, pct, signedPct } from '../../format.ts'
 import { N_MAX, N_MIN } from './constants.ts'
-import DeepDive from './DeepDive.tsx'
-import ExplainBack from './ExplainBack.tsx'
-import InterviewQs from './InterviewQs.tsx'
-import Intuition from './Intuition.tsx'
 import { runSimulation, type Controls } from './simulation.ts'
 import ManyTests from './views/ManyTests.tsx'
 import Peeking from './views/Peeking.tsx'
@@ -76,9 +71,8 @@ export default function AbTesting() {
 
   return (
     <ModuleLayout
-      title="A/B testing"
       controls={panel}
-      intuition={<Intuition />}
+      onPreset={(p) => setControls({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       play={
         <div className={stale ? styles.stale : undefined}>
           <SingleTest sim={sim} />
@@ -88,52 +82,10 @@ export default function AbTesting() {
       }
       breakIt={
         <div className={stale ? styles.stale : undefined}>
-          <Experiments
-            items={[
-              {
-                title: 'Manufacture false positives',
-                goal: 'Run 1,000 tests of a change that does nothing.',
-                setup: () => setControls({ ...DEFAULTS, lift: 0 }),
-                look: <>View 2: about 5% come out significant, and the p-value histogram is flat.</>,
-                why: <p>With no effect, the p-value is uniformly distributed between 0 and 1, so exactly a share α of tests land below α. That 5% is not a bug, it’s the definition of α: the false-positive rate you agreed to.</p>,
-              },
-              {
-                title: 'Peek every day',
-                goal: 'Same useless change, but check 20 times and stop at the first significant look.',
-                setup: () => setControls({ ...DEFAULTS, lift: 0, looks: 20 }),
-                look: <>The peeking chart below: “called a winner by a peeker” lands near 25%, five times the honest rate.</>,
-                why: <p>The running p-value is a random walk that dips below α now and then even with no effect. Every look is another draw. Fixed-horizon tests look once; sequential designs raise the bar at each look so the total stays at α.</p>,
-              },
-              {
-                title: 'Trust an underpowered winner',
-                goal: 'A real +5% lift, but only 2,000 users per arm.',
-                setup: () => setControls({ ...DEFAULTS, n: 2000 }),
-                look: <>Power drops to about 8%, and the winner’s-curse chart shows significant results averaging several times the true lift.</>,
-                why: <p>Only estimates that overshoot by about 2 standard errors pass the bar, and at low power the true effect sits far below that bar. Filtering on significance keeps the lucky overshoots.</p>,
-              },
-              {
-                title: 'Plan a test for a tiny effect',
-                goal: 'Baseline 2%, hoped-for lift +1% relative.',
-                setup: () => setControls({ ...DEFAULTS, baseline: 0.02, lift: 0.01, n: 100_000 }),
-                look: <>View 3’s “users per arm for 80% power”: about 7.7 million. At 100,000 users power is about 6%, barely above α.</>,
-                why: <p>n scales with 1/d². A 0.02-point difference is tiny next to the binomial noise of a 2% rate, so it takes millions of users per arm to see it.</p>,
-              },
-              {
-                title: 'Quadruple the sample',
-                goal: 'Compare the confidence interval at 2,500 and at 10,000 users per arm.',
-                setup: () => setControls({ ...DEFAULTS, n: 2500 }),
-                look: <>Note the interval width in View 1, then drag n to 10,000: it halves.</>,
-                why: <p>The standard error is proportional to 1/√n. Four times the data halves the uncertainty; to halve it again you need sixteen times the original.</p>,
-              },
-            ]}
-          />
           <Peeking sim={sim} />
           <WinnersCurse sim={sim} />
         </div>
       }
-      deepDive={<DeepDive />}
-      interview={<InterviewQs />}
-      explainBack={<ExplainBack />}
     />
   )
 }

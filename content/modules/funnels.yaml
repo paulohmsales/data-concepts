@@ -1,0 +1,26 @@
+slug: funnels
+title: Funnels
+track: data-analysis
+summary: 'order, windows and denominators: why two funnel dashboards disagree, and the 115% step.'
+roles:
+- da
+- ae
+lab: funnels
+order: 2
+intuition: |
+  A funnel counts how many users make it through a sequence of steps: visit, sign up, add to cart, buy. The drop between two steps is where the product loses people, so it is where to look.
+
+  Defining it takes more decisions than it seems. **Order**: does a user count at “cart” if they never signed up, or did it before signing up? **Window**: if they buy three weeks after their first visit, is that the same journey? **Who** is in the denominator: users, sessions, bots? Each choice changes the numbers, and two dashboards that made different choices will disagree.
+check:
+- q: What decisions define a funnel, beyond the list of steps?
+  a: |-
+    The unit (user, session, account), whether steps must happen in order, the conversion window (and whether it starts at the first step), whether repeated steps count, and which traffic is excluded (bots, internal users).
+- q: Step conversion shows 115%. What happened?
+  a: |-
+    The later step isn’t a subset of the earlier one: users reach it without the earlier event (guest flows, deep links, missing tracking) and the funnel counts events independently rather than ordered journeys.
+- q: Why does the conversion window matter, and how do you choose it?
+  a: |-
+    Purchases after the window aren’t counted, so a short window understates conversion, especially for considered purchases, and makes recent periods look worse (not enough time has passed). Choose from the observed time-to-convert distribution (e.g. the window covering 90–95% of conversions) and apply it consistently.
+- q: Top-of-funnel conversion dropped 30% overnight; every later step is flat. What do you check first?
+  a: |-
+    The denominator: a traffic change (bots, a new campaign bringing low-intent visitors, a tracking change double-firing page views). A real product problem would usually show in the steps below too.

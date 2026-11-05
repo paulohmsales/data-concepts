@@ -1,0 +1,28 @@
+slug: bootstrap
+title: The bootstrap
+track: statistics
+summary: uncertainty for any statistic by resampling, and the two ways it quietly fails.
+roles:
+- ds
+- da
+lab: bootstrap
+order: 3
+intuition: |
+  You have one sample and a statistic, say the median income of 30 people. How uncertain is it? For a mean there is a formula (s/√n). For a median, a 90th percentile or a ratio, the formula is ugly or doesn’t exist.
+
+  The **bootstrap** fakes the “repeat the study” experiment using only the data you have. Treat your sample as a stand-in for the population, draw a new sample of the same size from it *with replacement* (some people twice, about a third not at all), and recompute the statistic. Do it thousands of times. The spread of those recomputed values estimates the statistic’s standard error, and their middle 90% is a 90% interval.
+
+  It works when the sample resembles the population well enough. It quietly fails when the sample is tiny, or when the statistic depends on extremes the sample can’t contain.
+check:
+- q: Explain the bootstrap to a PM in two sentences.
+  a: |-
+    We can’t rerun the study, so we pretend our sample is the population and draw many fake “new studies” from it with replacement. How much the answer wobbles across those fake studies tells us how much it would wobble across real ones.
+- q: Why resample with replacement, and why the same size n?
+  a: |-
+    Without replacement, every resample of size n is just the original sample shuffled: same statistic every time, no variability. With replacement, each draw is independent from the empirical distribution, mimicking fresh draws from the population. Same n, because the uncertainty depends on n.
+- q: When does the bootstrap fail? Give two cases.
+  a: |-
+    Statistics driven by extremes (the max, extreme quantiles), since resamples can’t go beyond the sample; and tiny samples, which don’t represent the population. It also breaks with dependent data (time series, clustered users) unless you resample blocks or clusters instead of rows.
+- q: You A/B test revenue per user and want a CI for the ratio of means B/A. How would you bootstrap it?
+  a: |-
+    Resample users with replacement within A and within B separately (keeping each arm’s size), compute mean(B)/mean(A) for each pair of resamples, repeat thousands of times, and take the 2.5th and 97.5th percentiles. If users have many rows, resample users, not rows.

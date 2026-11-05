@@ -1,0 +1,26 @@
+slug: multiple-comparisons
+title: Multiple comparisons
+track: experimentation
+summary: 'test 20 things and something wins: Bonferroni, Holm and false discovery rates.'
+roles:
+- ds
+- da
+lab: multiple-comparisons
+order: 2
+intuition: |
+  A 5% significance level means one test with no real effect fools you 5% of the time. Now check 20 metrics, or slice by 20 segments, or ship 20 variants. Each is another 5% lottery ticket, and the chance that *at least one* comes up “significant” by luck is 64%.
+
+  Corrections raise the bar. **Bonferroni** tests each at α/m, so the chance of any false positive stays under α, at a real cost in power. **Holm** does the same job a little less harshly. **Benjamini–Hochberg** controls something different: the share of your “wins” that are false (the false discovery rate). It is the usual choice when you screen many things and can tolerate a few duds.
+check:
+- q: |-
+    You test 10 independent metrics at α = 0.05 and none has a real effect. What is the chance at least one is significant?
+  a: 1 − 0.95¹⁰ ≈ 40%.
+- q: What is the difference between controlling the family-wise error rate and the false discovery rate?
+  a: |-
+    FWER (Bonferroni, Holm) controls the chance of making even one false claim: strict, good when any false positive is costly. FDR (Benjamini–Hochberg) controls the expected share of false claims among your claims: you accept some duds in exchange for much more power, which suits screening many hypotheses.
+- q: Why is Holm never worse than Bonferroni?
+  a: |-
+    It uses α/m only for the smallest p-value, then α/(m−1), α/(m−2)… for the next ones, stopping at the first failure. It still controls the FWER but rejects at least as many hypotheses as Bonferroni.
+- q: After a flat test, an analyst finds “B wins for Android users in Brazil, p = 0.01”. What do you do?
+  a: |-
+    Treat it as a hypothesis, not a result: it is one of many slices that could have been reported, so its p-value is not 0.01 in any meaningful sense. Count how many slices were looked at, correct for them, and if it still matters, run a new test targeted at that segment.

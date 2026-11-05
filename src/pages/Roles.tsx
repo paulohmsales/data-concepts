@@ -3,17 +3,15 @@ import { useCallback, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import PlotFigure from '../components/PlotFigure.tsx'
 import type { VizTheme } from '../components/vizTheme.ts'
-import { BRIEFS, DEMAND, SAMPLE } from '../data/market.ts'
 import { int } from '../format.ts'
-import { modules, ROLES, type Role } from '../modules/registry.ts'
+import { useCatalog, useRoles } from '../lib/api.ts'
+import type { Market, RoleKey } from '../lib/content.ts'
 import styles from './Pages.module.css'
 
-const ORDER: Role[] = ['da', 'ae', 'de', 'ds', 'mle', 'ai', 'swe', 'mgr']
-
-function Demand({ role }: { role: Role }) {
+function Demand({ role, title, market }: { role: RoleKey; title: string; market: Market }) {
   const build = useCallback(
     (width: number, t: VizTheme): Plot.PlotOptions => {
-      const data = Object.entries(DEMAND)
+      const data = Object.entries(market.demand)
         .map(([skill, by]) => ({ skill, pct: by[role] / 100 }))
         .sort((a, b) => b.pct - a.pct)
         .slice(0, 14)
@@ -29,13 +27,15 @@ function Demand({ role }: { role: Role }) {
         ],
       }
     },
-    [role],
+    [role, market],
   )
-  return <PlotFigure build={build} label={`Most requested skills for ${ROLES[role]}`} />
+  return <PlotFigure build={build} label={`Most requested skills for ${title}`} />
 }
 
 export default function Roles() {
   const { hash } = useLocation()
+  const { roles, market } = useRoles()
+  const { modules } = useCatalog()
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
   }, [hash])
@@ -44,28 +44,28 @@ export default function Roles() {
     <div className={styles.page}>
       <h1>Roles and paths</h1>
       <p className="lede" style={{ maxWidth: '70ch' }}>
-        What each data role is asked for, measured on job posts in the jobz database (snapshot 2026-11-05),
+        What each data role is asked for, measured on job posts in the jobz database (snapshot {market.as_of}),
         the modules that cover it, and what’s still missing. Percentages are the share of posts in that
         title family mentioning the skill.
       </p>
       <nav className={styles.roleTabs}>
-        {ORDER.map((r) => (
-          <a key={r} href={`#${r}`}>
-            {ROLES[r]}
+        {roles.map((r) => (
+          <a key={r.key} href={`#${r.key}`}>
+            {r.title}
           </a>
         ))}
       </nav>
-      {ORDER.map((r) => {
-        const b = BRIEFS[r]
+      {roles.map((b) => {
+        const r = b.key
         const mods = modules.filter((m) => m.roles.includes(r))
         return (
           <section key={r} id={r} className={styles.roleSection}>
-            <h2>{ROLES[r]}</h2>
+            <h2>{b.title}</h2>
             <p className={styles.roleWhat}>{b.what}</p>
             <div className={styles.roleGrid}>
               <div>
-                <h4>Most requested ({int(SAMPLE[r])} posts)</h4>
-                <Demand role={r} />
+                <h4>Most requested ({int(market.sample[r])} posts)</h4>
+                <Demand role={r} title={b.title} market={market} />
               </div>
               <div>
                 <h4>Modules for this role</h4>

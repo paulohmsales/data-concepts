@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+api/.venv/
+api/content.db
+api/content.tmp
+api/**/__pycache__/
+api/.pytest_cache/

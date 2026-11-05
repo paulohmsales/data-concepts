@@ -1,0 +1,267 @@
+slug: snapshots
+title: Snapshots and incremental loads
+track: data-engineering
+summary: full reloads, watermarks, SCD2 history, hard deletes, late data and idempotent retries.
+roles: [de, ae]
+lab: snapshots
+order: 1
+
+intuition: |
+  The app has a **source** database that it changes all day: customers sign up, switch plans, get deleted. Analytics wants a copy in the **warehouse**, and there are three basic ways to keep that copy up to date.
+
+  **Full reload:** empty the copy and copy everything again. Easy, always right afterwards, and safe to rerun, but it costs as much as the whole table every time and only ever knows *now*.
+
+  **Incremental load:** remember a **watermark** (“I have everything up to updated_at = 42”) and next time copy only rows with updated_at > 42. Cheap, but it trusts that every change bumps updated_at, shows up in order, and never disappears. Hard deletes, late-arriving rows and changes made *while the job runs* all break that trust. And if the job crashes and retries, it must be **idempotent**: running it twice must give the same table as running it once.
+
+  **Snapshot (SCD2):** keep every version of each row with `valid_from` and `valid_to`, so you can ask “what was true at T?”. But a snapshot only sees the source when it runs: anything that changes and changes back between two runs is invisible.
+
+  The clock in the lab is logical: every action takes a tick (an incremental job takes two: extract, then finish).
+
+experiments:
+  - title: A hard delete
+    goal: Load everything, hard-delete Bruno in the source, then run all three jobs again.
+    setup: {scenario: hard-delete}
+    look: The incremental target still has Bruno, marked as a ghost. The full reload drops him; the snapshot closes his version.
+    why: |
+      A watermark query asks “which rows have updated_at > W?”. A deleted row has no updated_at any more, so there is nothing to find. Fixes: soft deletes in the source (a `deleted_at` that bumps updated_at), log-based CDC (deletes are events), or a periodic key comparison that removes ghosts.
+  - title: A late-arriving row
+    goal: Load incrementally, change Ana (the watermark moves on), then a row appears with an updated_at older than the watermark, e.g. from a lagging replica.
+    setup: {scenario: late-row}
+    look: The incremental target is missing the late row for good. The full reload has it.
+    why: |
+      The row fails updated_at > W on every future run. Re-read a lookback window (updated_at > W − N) and merge by key, so the overlap is harmless, or watermark on a commit or ingestion time the database assigns on arrival.
+  - title: Crash, then retry (append)
+    goal: An append-only job writes its rows, then crashes before saving the watermark. The scheduler retries it.
+    setup: {scenario: crash-append}
+    look: Every row of that batch is in the target twice.
+    why: |
+      The watermark never moved, so the retry extracted the same rows, and INSERT added them again. A job is idempotent only if its write is: MERGE by key, delete-then-insert the batch’s keys, or overwrite a partition.
+  - title: Crash, then retry (merge)
+    goal: The same crash and retry, but the job merges by key.
+    setup: {scenario: crash-merge}
+    look: No duplicates.
+    why: |
+      Replacing by key means running the job twice on the same input gives the same table, so retries are safe. Save the watermark *after* the data commits: a crash in between then means re-reading a little, never skipping.
+  - title: Mid-run change, watermark = job end time
+    goal: While the job runs, Ana changes plan. The job saves its finish time as the watermark.
+    setup: {scenario: mid-run-job-end}
+    look: Ana is stale in the target, and stays stale after more runs.
+    why: |
+      Her change happened after the extract but is stamped before the saved watermark, so no later run will ever select it. The watermark claimed rows the job never read.
+  - title: Mid-run change, watermark = max(updated_at)
+    goal: The same mid-run change, but the watermark is the newest updated_at the job actually loaded.
+    setup: {scenario: mid-run-max}
+    look: Ana is stale after the first run and correct after the next.
+    why: |
+      max(updated_at) of the loaded rows only claims what was really read. The change sits above it, so the next run picks it up.
+  - title: Two changes between snapshots
+    goal: Snapshot, then Carla upgrades to enterprise and downgrades back to free before the next snapshot.
+    setup: {scenario: between-snapshots}
+    look: "Move the “as of T” slider to the tick of the upgrade: the truth says enterprise, the snapshot says free."
+    why: |
+      A snapshot records state at run time, so whatever happened between runs is gone. Snapshot cadence is the resolution of your history. For finer questions you need CDC or an audit log.
+  - title: What did the dashboard show at T?
+    goal: Snapshot regularly while plans change, then full-reload.
+    setup: {scenario: dashboard-at-t}
+    look: Drag the “as of T” slider. The SCD2 table answers for any tick; the full-reload table only knows today.
+    why: |
+      valid_from ≤ T < valid_to picks exactly one version per key at any T. That is what makes point-in-time reporting, and reproducing an old dashboard, possible.
+
+deep_dive:
+  - type: heading
+    text: The three questions behind every load design
+  - type: markdown
+    md: |
+      Every way of copying a table is an answer to three questions. **How do I find what changed?** (Everything, a timestamp, a diff, or the database log.) **How do I write it?** (Replace, append, or merge by key.) **What do I remember between runs?** (Nothing, a watermark, or a log offset.) The failures in the lab are all mismatches between those answers and how the source really behaves.
+  - type: table
+    columns:
+      - {key: s, label: Strategy}
+      - {key: cost, label: Cost per run}
+      - {key: fresh, label: Freshness}
+      - {key: deletes, label: Hard deletes}
+      - {key: retry, label: Retry-safe}
+      - {key: when, label: Use when}
+    rows:
+      - {s: Full reload, cost: Grows with table size, fresh: Hours (batch), deletes: Handled, retry: Idempotent, when: "Small tables, or as a periodic reconciliation"}
+      - {s: Watermark (updated_at), cost: Grows with change volume, fresh: Minutes to hours, deletes: Missed, retry: Needs MERGE, when: "The source has a reliable, indexed modification time"}
+      - {s: Snapshot diff (hash compare), cost: "Full extract, only changes written", fresh: Hours, deletes: "Detected (anti-join)", retry: Idempotent with MERGE, when: "No change columns, no CDC; a full extract is affordable"}
+      - {s: Log-based CDC, cost: Grows with change volume, fresh: Seconds, deletes: "Handled (delete events)", retry: Needs ordering and dedupe, when: "You can read the database log (Debezium, GoldenGate, DMS)"}
+
+  - type: heading
+    text: Watch a watermark go wrong
+  - type: stepper
+    key: snapshots.watermark
+    caption: Rows in the source plotted by updated_at. The shaded band is what each run extracts; the line is the saved watermark.
+    steps:
+      - title: First run
+        md: The job extracts everything with updated_at > −∞ and saves the watermark at the newest updated_at it loaded, 5.
+        state: {phase: 1}
+      - title: New changes arrive
+        md: Rows 6 and 7 change. The next run extracts updated_at > 5, which is exactly those two, and moves the watermark to 7.
+        state: {phase: 2}
+      - title: A change lands while the job runs
+        md: The third run extracts at t = 9 (nothing new), but row 8 is committed with updated_at = 9 *during* the run. A job that saves its *end time* (10) as the watermark has just claimed row 8 without reading it.
+        state: {phase: 3}
+      - title: Skipped forever
+        md: Every later run asks for updated_at > 10, so row 8 is never selected. Saving max(updated_at) of the loaded rows (7) instead would pick it up next time.
+        state: {phase: 4}
+      - title: A late row from a lagging replica
+        md: Row 4b arrives with updated_at = 4, below any watermark. Only a lookback window (updated_at > W − N) or a periodic full comparison will ever see it.
+        state: {phase: 5}
+
+  - type: heading
+    text: A watermark load done properly
+  - type: steps
+    items:
+      - title: Read the last committed watermark
+        md: From a state table, not from the target (the target may hold a half-finished run).
+      - title: Extract with a lookback
+        md: Select rows with updated_at > watermark − lookback (say one hour). The overlap covers late commits, clock skew between app servers, and long transactions that commit after your extract with older timestamps.
+      - title: Write idempotently
+        md: MERGE (or delete-then-insert) by primary key, so re-reading the overlap or retrying a failed run changes nothing.
+      - title: Advance the watermark to max(updated_at) actually loaded
+        md: Never to “now” or the job’s end time.
+      - title: Commit the watermark last
+        md: After the data is committed. A crash in between then means re-reading a little, never skipping.
+  - type: code
+    lang: sql
+    code: |
+      MERGE INTO dim_customer t
+      USING (
+        SELECT * FROM src_customer
+        WHERE updated_at > :watermark - INTERVAL '1 hour'
+        QUALIFY row_number() OVER (PARTITION BY id ORDER BY updated_at DESC) = 1  -- one row per key
+      ) s
+      ON t.id = s.id
+      WHEN MATCHED AND s.updated_at >= t.updated_at THEN
+        UPDATE SET name = s.name, plan = s.plan, updated_at = s.updated_at
+      WHEN NOT MATCHED THEN
+        INSERT (id, name, plan, updated_at) VALUES (s.id, s.name, s.plan, s.updated_at);
+  - type: callout
+    kind: warn
+    title: Two subtle bugs
+    md: |
+      **Duplicates in the batch:** if the extract holds two versions of one key, most MERGE implementations fail (“multiple source rows matched”), so deduplicate first. **Out-of-order versions:** the `s.updated_at >= t.updated_at` guard stops a late, older version from overwriting a newer one.
+
+  - type: heading
+    text: "No CDC and no change column: diff the snapshots"
+  - type: markdown
+    md: |
+      A classic interview question: an Oracle table has no updated_at and you can’t read the log. Take a full extract, hash each row, and compare with yesterday’s hashes by primary key. New keys are inserts, changed hashes are updates, and missing keys are deletes. You still pay for a full extract, but you only *write* the changes, and you get deletes for free.
+  - type: code
+    lang: sql
+    code: |
+      WITH today AS (
+        SELECT id, md5(concat_ws('|', coalesce(name, '∅'), coalesce(plan, '∅'))) AS row_hash
+        FROM extract_today
+      )
+      SELECT coalesce(t.id, y.id) AS id,
+             CASE WHEN y.id IS NULL THEN 'insert'
+                  WHEN t.id IS NULL THEN 'delete'
+                  ELSE 'update' END AS change
+      FROM today t
+      FULL OUTER JOIN state_hashes y ON t.id = y.id
+      WHERE y.id IS NULL OR t.id IS NULL OR t.row_hash <> y.row_hash;
+  - type: markdown
+    md: |
+      Other options worth raising: Oracle’s `ORA_ROWSCN` pseudo-column (block-level unless the table has ROWDEPENDENCIES), Flashback Query (`AS OF TIMESTAMP`) for a consistent extract without locks, adding triggers or a change column if you may touch the source, and log-based tools (LogMiner, GoldenGate, AWS DMS) as the long-term fix.
+
+  - type: heading
+    text: SCD type 2 on a 5-million-row full daily extract
+  - type: steps
+    items:
+      - title: Hash the tracked columns
+        md: One row_hash per key over the columns whose history matters. Leave out audit columns like loaded_at, or every row changes daily.
+      - title: Compare only with current rows
+        md: Join today’s extract to the dimension where is_current. Comparing 5 M hashes with 5 M hashes is cheap; comparing every column is not.
+      - title: Close changed and deleted versions
+        md: Set valid_to = load date (and is_current = false) for keys whose hash changed or that vanished.
+      - title: Open new versions
+        md: Insert valid_from = load date, valid_to = NULL for new and changed keys.
+      - title: Do it atomically and idempotently
+        md: One transaction, or one MERGE fed with both the “close” and the “insert” rows. Key the run on the load date rather than now(), so rerunning a day gives the same table.
+  - type: code
+    lang: sql
+    caption: The standard single-MERGE pattern. Changed keys appear twice in the source, once to close the old version and once (with a NULL merge key, so it never matches) to insert the new one.
+    code: |
+      MERGE INTO dim_customer d
+      USING (
+        SELECT s.id AS merge_key, s.* FROM stg s
+        UNION ALL
+        SELECT NULL AS merge_key, s.* FROM stg s
+        JOIN dim_customer d ON d.id = s.id AND d.is_current AND d.row_hash <> s.row_hash
+      ) s
+      ON d.id = s.merge_key AND d.is_current
+      WHEN MATCHED AND d.row_hash <> s.row_hash THEN
+        UPDATE SET is_current = false, valid_to = :load_date
+      WHEN NOT MATCHED THEN
+        INSERT (id, name, plan, row_hash, valid_from, valid_to, is_current)
+        VALUES (s.id, s.name, s.plan, s.row_hash, :load_date, NULL, true);
+  - type: markdown
+    md: |
+      Deletes need a separate step: keys that are current in the dimension but absent from today’s extract. In dbt, this whole pattern is a **snapshot**: `strategy='check'` with `check_cols` compares values the way the lab does, `strategy='timestamp'` trusts an updated_at, and `invalidate_hard_deletes` closes vanished keys.
+  - type: worked
+    title: As-of queries on half-open intervals
+    md: |
+      Use valid_from ≤ t < valid_to, with NULL meaning “still valid”. Half-open intervals tile time with no gaps and no overlaps, so every key has exactly one version at any t. Closed intervals (≤ on both ends) give two versions at the boundary instant, and that silently duplicates rows in joins.
+
+  - type: heading
+    text: What changes in production
+  - type: markdown
+    md: |
+      - **Backfills:** parameterise every job by the logical date it processes, so a rerun for last Tuesday is the same code with a different date.
+      - **Reconciliation:** even a good incremental pipeline drifts (manual fixes, missed deletes). A weekly key-and-count comparison against the source catches it, and a periodic full reload resets it.
+      - **Monitoring:** rows extracted per run, watermark lag (now − watermark), duplicate keys in the target, freshness SLAs. An extract of 0 rows is more often a broken query than a quiet day.
+      - **Snapshot cadence is your history’s resolution:** daily snapshots can’t answer “what was true at 3 pm?”. If that matters, you need CDC or an audit log.
+  - type: callout
+    kind: prod
+    title: Rule of thumb
+    md: Start with a full reload. Move to incremental only when it costs too much, and keep the full reload as your repair tool. Most incremental bugs are found by comparing against one.
+  - type: related
+    slugs: [retries-idempotency, late-data, surrogate-keys, window-functions, partitioning]
+
+interview:
+  - level: junior
+    q: When would you choose a full reload over an incremental load?
+    answer: When the table is small enough that reloading is cheap and fast enough for the freshness required. It’s simpler, idempotent, and handles deletes and late data automatically. Incremental pays off when the table is large relative to its daily change, at the cost of more logic (watermarks, merges, deletes, backfills).
+    listen_for: [Cost vs change volume, Simplicity and idempotency of the full reload, Deletes and late data as incremental’s weak spots]
+  - level: mid
+    q: Design incremental loading from an Oracle table that has no CDC and no change-tracking columns.
+    answer: |
+      Clarify first: table size, change rate, required freshness, and whether we may change the source.
+
+      - If a full extract is affordable: extract daily (consistently, e.g. Flashback AS OF a timestamp), hash rows, and diff against yesterday’s hashes by primary key to get inserts, updates and deletes; MERGE only the changes.
+      - If not: look for proxies (ORA_ROWSCN with ROWDEPENDENCIES, an ever-increasing id for append-only tables), or ask the source team for a change column or triggers.
+      - Long term: log-based CDC (LogMiner, GoldenGate, DMS) into a stream, which also gives deletes and low latency.
+    listen_for: [Asks about size, change rate and freshness, Hash diff by key including deletes, A consistent extract, Names log-based CDC as the end state]
+    follow_ups:
+      - q: The full extract takes 3 hours and locks the table. Now what?
+        a: Extract from a replica or standby, split by key ranges in parallel, use Flashback for a consistent read without locks, or push for CDC.
+  - level: mid
+    q: How would you implement SCD Type 2 for a five-million-row table with a full daily extract?
+    answer: Hash the tracked columns per key and join today’s extract to the current dimension rows. Close versions whose hash changed or whose key disappeared (valid_to = load date), and insert new versions for new and changed keys (valid_from = load date). Do it in one transaction or MERGE, keyed on the load date so a rerun is idempotent, and cluster on (id, is_current). In dbt this is a check-strategy snapshot with invalidate_hard_deletes.
+    listen_for: [A row hash, not column-by-column comparison, Compare with current rows only, Deletes handled, Idempotent rerun by load date, Half-open validity intervals]
+  - level: mid
+    q: Your incremental job wrote its rows, then crashed before saving the watermark. It retries. What happens?
+    answer: It re-reads the same batch from the old watermark. If the write is an append, the rows are duplicated. If it is a MERGE by key (or delete-and-insert of the batch’s keys), the retry is harmless. That’s why the watermark is committed after the data, and why the write must be idempotent.
+    listen_for: [Re-read from the old watermark, Append duplicates and merge doesn’t, "Order: data, then state"]
+  - level: senior
+    q: Rows arrive with updated_at older than your watermark (replica lag, mobile sync). How do you design for it?
+    answer: Extract with a lookback window (watermark − N) and rely on an idempotent MERGE to absorb the overlap. Size N from the observed lateness, prefer a commit or ingestion timestamp set by the database over a business timestamp, monitor rows arriving behind the watermark, and run periodic reconciliation for whatever falls outside N.
+    listen_for: [Lookback plus MERGE, Sizing N from data, Commit time vs business time, Reconciliation as the backstop]
+  - level: staff
+    q: The finance team says last month’s revenue changed after it was reported. How do you make historical reporting reproducible?
+    answer: Decide which questions need “as it was known then” and which need “as it is now”, and keep both. Keep raw extracts immutable and dated; build SCD2 or snapshot tables for entities that change; make every model reproducible for a given as-of date; and for closed periods publish frozen snapshots (or use table time travel) that reports point to, with restatements as explicit, audited events rather than silent recalculation.
+    listen_for: [Distinguishes as-known from as-is, An immutable raw layer, Frozen period snapshots, Restatement as a process]
+
+check:
+  - q: Why can’t a watermark-based incremental load see hard deletes, and what are two ways to handle them?
+    a: The job selects rows with updated_at > watermark; a deleted row no longer exists, so there is nothing to select. Options are soft deletes in the source, change data capture from the database log, or a periodic full key comparison (an anti-join of target keys against source keys) to close or remove ghosts.
+  - q: What makes a load job idempotent, and why does it matter for retries?
+    a: Running it twice on the same input leaves the target exactly as running it once. Schedulers retry failed jobs, and a job can fail after writing data but before recording success. Merging by key (or overwriting a partition) makes the retry harmless; a plain INSERT duplicates rows.
+  - q: Why should the next watermark be max(updated_at) of the loaded rows and not the time the job finished?
+    a: Rows can change after you extract and before you finish. If you save the finish time, those changes have updated_at ≤ the watermark and are skipped forever. max(updated_at) of what you actually loaded only claims what you really have.
+  - q: A row arrives with updated_at older than your watermark. What happens, and how do you design for it?
+    a: The incremental job never selects it, so the target silently misses it while a full reload would have it. Use a lookback window with an idempotent merge, a watermark on an ingestion or commit timestamp, or a periodic full reconciliation.
+  - q: Your SCD2 snapshot runs daily. Product asks how many users were on a trial plan for a few hours last Tuesday. What can you tell them?
+    a: The snapshot can’t answer it, because it only sees state at run time. A plan that changed and changed back between two daily runs never appears. You need finer snapshots, the source’s own change history (an audit table, CDC log or event stream), or a timestamp-strategy snapshot.

@@ -1,0 +1,35 @@
+slug: window-functions
+title: Window functions
+track: analytics-engineering
+summary: partitions, peers and frames row by row; the default-frame and tie traps.
+roles:
+- ae
+- da
+- de
+lab: window-functions
+order: 2
+intuition: |
+  A GROUP BY squashes rows into one per group. A **window function** keeps every row and adds a value computed from *other* rows: a running total, a rank, the previous value, the share of the store’s total.
+
+  For each row, three questions decide which other rows it sees:
+
+  - **PARTITION BY**: which group am I in? (Without it, the whole table is one group.)
+  - **ORDER BY**: in what order is my group sorted? Rows that tie are *peers*.
+  - **The frame**: which slice of my sorted group does an aggregate use? The default depends on whether there is an ORDER BY, and it includes peers. That default causes most window bugs.
+check:
+- q: What is the difference between GROUP BY and a window function?
+  a: |-
+    GROUP BY returns one row per group; a window function returns every input row, with a value computed over a set of related rows (its partition and frame). Use windows when you need row-level detail plus group context.
+- q: |-
+    What is the default frame when you write SUM(x) OVER (PARTITION BY a ORDER BY b), and why does it matter?
+  a: |-
+    RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW: from the partition start to the current row including all rows tied on b. With ties, rows share the same running total. Without ORDER BY the default is the whole partition.
+- q: Explain the difference between row_number, rank and dense_rank on a tie.
+  a: |-
+    Two rows tied for second: row_number gives 2 and 3 (arbitrary which), rank gives 2 and 2 then skips to 4, dense_rank gives 2 and 2 then continues with 3.
+- q: You dedupe with row_number() OVER (PARTITION BY id ORDER BY updated_at DESC) = 1. What can go wrong?
+  a: |-
+    If two rows share the latest updated_at, which one survives is arbitrary and can change between runs, making the model non-deterministic. Add a unique tie-breaker to the ORDER BY (e.g. a load id or the raw row hash).
+- q: Why can’t you filter on a window function in WHERE?
+  a: |-
+    Logical order: FROM → WHERE → GROUP BY → HAVING → windows → QUALIFY → SELECT → ORDER BY. WHERE runs before windows exist. Use QUALIFY or wrap the query and filter outside.

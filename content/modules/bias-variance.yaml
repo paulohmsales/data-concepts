@@ -1,0 +1,26 @@
+slug: bias-variance
+title: Bias vs variance
+track: machine-learning
+summary: underfit, overfit and the U-shaped test error; more data and ridge as fixes.
+roles:
+- ds
+- mle
+lab: bias-variance
+order: 1
+intuition: |
+  A model learns from one sample of data, but you care about how it does on the next one. Its errors on new data come from three places. **Bias**: the model is too simple to follow the real pattern, so it is wrong in the same way whatever sample it saw. **Variance**: the model is so flexible that it follows the noise in its particular sample, so a different sample would give a very different model. And **noise**: randomness no model can predict.
+
+  More flexibility trades bias for variance. Training error always falls as the model gets more complex, because it can memorise. Test error falls, bottoms out, then rises. The sweet spot moves with the data: more points or a penalty on wild models (regularisation) let you afford more complexity.
+check:
+- q: Define bias and variance in terms of “training on many different samples”.
+  a: |-
+    Train the same model on many independent samples. Bias is how far the average of those models is from the truth; variance is how much the individual models scatter around their average. Expected test error = bias² + variance + irreducible noise.
+- q: Why does training error keep falling with complexity while test error eventually rises?
+  a: |-
+    Extra flexibility can always fit the training points more closely, including their noise. That noise doesn’t repeat in new data, so beyond some point the extra fit is variance, and test error goes up.
+- q: Your model has low training error and high validation error. What are three things to try?
+  a: |-
+    It’s overfitting (high variance): get more data, regularise (ridge/lasso, dropout, early stopping, smaller trees), or reduce complexity (fewer features or parameters). Bagging and averaging models also reduce variance.
+- q: Both errors are high and close together. What does that suggest?
+  a: |-
+    High bias (underfitting): the model can’t represent the pattern. More data won’t help much; use a more flexible model or better features.
