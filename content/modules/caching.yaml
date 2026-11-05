@@ -1,0 +1,113 @@
+slug: caching
+title: Caching
+track: software-engineering
+summary: why 1% of keys can serve half the traffic, the staleness you buy with a TTL, and the stampede when everything expires at once.
+roles: [swe, de, ai]
+lab: caching
+order: 3
+
+intuition: |
+  A cache keeps recently used answers close and cheap, so most requests never reach the slow, expensive thing behind it (a database, an API, an LLM). It works because real traffic is **skewed**: a few products, users or queries get most of the requests. Keep those few in memory and you serve a large share of traffic from a small cache.
+
+  Every cache trades **freshness for speed**. A cached value can be out of date, and a **TTL** (time to live) bounds how out of date by throwing values away after a while. But expiry sends traffic back to the database, and if many popular keys expire at the same moment, the database gets hit by everything at once: a **cache stampede**.
+
+  “There are only two hard things in computer science: cache invalidation and naming things.” The lab shows why the first one is hard.
+
+experiments:
+  - title: A small cache, a big effect
+    goal: Cache 1% of the keys under typical skew (Zipf s = 1).
+    setup: {skew: 1, cachePct: 0.01}
+    look: About 43% of requests hit the cache with an LRU policy; pinning the top keys would get about 56%.
+    why: |
+      With Zipf-distributed popularity the top 1% of keys carry roughly half the traffic. LRU keeps most of them but sometimes evicts a popular key to make room for a one-off request, which is the gap to the ideal.
+  - title: Flat traffic, weak cache
+    goal: Less skewed popularity (s = 0.7).
+    setup: {skew: 0.7, cachePct: 0.01}
+    look: Only about 9% hit; even 10% of keys gives only about a third.
+    why: |
+      Caches pay off in proportion to skew. Measure your access distribution before assuming a cache will help (e.g. long-tail search queries cache badly; product pages cache well).
+  - title: Long TTL, stale reads
+    goal: TTL of an hour on values that change 6 times an hour.
+    setup: {ttl: 3600, updatesPerHour: 6}
+    look: More than 80% of reads return an outdated value. With a 60-second TTL it’s about 5%.
+    why: |
+      A value is stale from the moment it changes until the cached copy expires. With update rate u and TTL T, the stale share is 1 − (1 − e^(−uT)) / (uT). Short TTLs or invalidating on write (delete the key when the data changes) keep it fresh, at the cost of more misses.
+  - title: The stampede
+    goal: 500 hot keys cached at the same moment, all with a 60 s TTL.
+    setup: {ttl: 60, jitter: 0, coalesce: false}
+    look: Every 60 seconds the database gets a spike of about 5,000 queries in one second, and nothing in between.
+    why: |
+      All keys expire together, and every request arriving during the 0.5 s recompute misses. A database sized for the average falls over on the spike.
+  - title: Jitter and coalescing
+    goal: Add ±30% random jitter to TTLs and coalesce concurrent misses.
+    setup: {ttl: 60, jitter: 0.3, coalesce: true}
+    look: The peak drops from about 5,000/s to a few dozen per second.
+    why: |
+      Jitter spreads expirations over time; coalescing (a lock or single-flight per key) lets only one request recompute while the others wait for its result. Serving the stale value while one request refreshes in the background (stale-while-revalidate) is another option.
+
+deep_dive:
+  - type: heading
+    text: Where caches sit
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: user, label: User, col: 0, row: 0}
+        - {id: cdn, label: CDN / browser cache, sub: "static files, pages", col: 1, row: 0}
+        - {id: app, label: App, sub: "in-process cache", col: 2, row: 0}
+        - {id: redis, label: Shared cache, sub: "Redis / Memcached", col: 3, row: 0}
+        - {id: db, label: Database, sub: "query/result cache", col: 3, row: 1}
+        - {id: wh, label: Warehouse, sub: "result cache, materialised views", col: 2, row: 1}
+      edges:
+        - {from: user, to: cdn}
+        - {from: cdn, to: app}
+        - {from: app, to: redis}
+        - {from: redis, to: db}
+        - {from: app, to: wh}
+    steps:
+      - title: Close to the user
+        md: CDNs and browsers cache whole responses near the user. Huge hit rates for static or public content, hard to invalidate quickly.
+        state: {active: [user, cdn]}
+      - title: Next to the code
+        md: An in-process cache is the fastest (no network) but each server has its own copy, so invalidation means telling every server.
+        state: {active: [cdn, app]}
+      - title: Shared cache
+        md: Redis or Memcached in front of the database, the classic “cache-aside” pattern. Read from cache; on miss read the DB and fill the cache; on write update the DB and delete the key.
+        state: {active: [app, redis, db]}
+      - title: Data systems cache too
+        md: Warehouses cache query results and let you precompute (materialised views, aggregate tables). A dashboard that hits a pre-aggregated table is a cache with a refresh schedule instead of a TTL.
+        state: {active: [app, wh]}
+  - type: heading
+    text: Patterns and their trade-offs
+  - type: table
+    columns:
+      - {key: p, label: Pattern}
+      - {key: how, label: How}
+      - {key: risk, label: Risk}
+    rows:
+      - {p: Cache-aside, how: "App reads cache, falls back to DB, then fills the cache", risk: "Race between a write and a refill can cache an old value; use delete-on-write and short TTLs"}
+      - {p: Write-through, how: "Writes go to the cache and the DB together", risk: "Write latency; caching data nobody reads"}
+      - {p: Write-behind, how: "Writes go to the cache, flushed to the DB later", risk: "Data loss if the cache dies before flushing"}
+      - {p: TTL only, how: "Let values expire", risk: "Staleness up to the TTL; synchronised expiry"}
+      - {p: Event-driven invalidation, how: "Delete or update keys when change events arrive (CDC)", risk: "Missed events leave stale data forever; keep a TTL as a backstop"}
+  - type: formula
+    text: "stale share = 1 − (1 − e^(−uT)) / (uT)        u = updates per second, T = TTL"
+  - type: callout
+    kind: prod
+    md: Measure hit rate, latency and load on the backing store per key prefix. A cache that quietly drops to a 20% hit rate after a deploy (new key format, a flush) can take the database down. Warm caches gradually, add jitter to every TTL, and protect hot keys with single-flight refresh.
+  - type: related
+    slugs: [queues, tail-latency, rate-limiting, llm-cost]
+
+interview:
+  - level: mid
+    q: How do you keep a cache consistent with the database?
+    answer: There is no free lunch. The common approach is cache-aside with delete-on-write (update the DB, then delete the key so the next read refills it) plus a TTL as a safety net. For stricter needs use change data capture to invalidate keys from the database’s change log, or versioned keys. Accept bounded staleness where the product allows it, and be explicit about which reads need fresh data.
+    listen_for: [Delete on write, TTL backstop, CDC-based invalidation, Explicit staleness requirements]
+  - level: mid
+    q: What is a cache stampede and how do you prevent it?
+    answer: Many requests miss on the same hot key at once (it expired, or the cache was flushed) and all hit the database together. Prevent it with request coalescing (single-flight or a lock per key), TTL jitter, stale-while-revalidate (serve the old value while one request refreshes), early probabilistic refresh, and warming caches gradually after deploys.
+    listen_for: [Definition, Coalescing, Jitter, Stale-while-revalidate]
+  - level: senior
+    q: You cache LLM responses for a support bot. What are the pitfalls?
+    answer: Hit rates depend on how repetitive questions are (normalise text, or use semantic caching with embeddings and a strict similarity threshold); answers can depend on user context or permissions (include them in the key, or don’t cache personalised answers); underlying documents change (invalidate when the knowledge base updates, plus TTL); and wrong cached answers are served repeatedly (allow feedback to evict). Measure quality on cached responses, not just hit rate.
+    listen_for: [Key design includes context, Semantic caching thresholds, Invalidation on content change, Quality monitoring]

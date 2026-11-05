@@ -1,0 +1,127 @@
+slug: rate-limiting
+title: Rate limiting and retries
+track: software-engineering
+summary: token buckets, why retrying immediately turns a blip into an outage, and how backoff with jitter breaks up a thundering herd.
+roles: [swe, de, ai]
+lab: rate-limiting
+order: 4
+
+intuition: |
+  Every service has a **capacity**: the requests per second it can handle. A **rate limiter** protects it by rejecting (or queueing) work beyond a limit, usually with a **token bucket**: tokens drip in at the allowed rate, each request spends one, and the bucket's size allows short bursts.
+
+  Clients see rejections and failures, and the natural reaction is to **retry**. Retries are good: they turn brief failures into successes. But they also add load at exactly the moment the server is struggling. If every client retries immediately, a 3-second blip becomes a flood several times larger than normal traffic, which keeps the server down: a **retry storm**.
+
+  The fixes are old and simple: wait longer after each failure (**exponential backoff**), give up after a few attempts, and add **randomness (jitter)** so clients that failed together don't all come back together.
+
+experiments:
+  - title: No retries
+    goal: The server is down from 5 s to 8 s; clients don't retry.
+    setup: {scenario: outage, strategy: none}
+    look: Recovery is instant, but every request sent during the outage, about 2,400 of them, is simply lost.
+    why: |
+      Without retries a transient failure becomes a user-visible error. Retries exist for good reason; the question is how to retry.
+  - title: The retry storm
+    goal: Retry immediately, up to 50 times.
+    setup: {scenario: outage, strategy: immediate, maxAttempts: 50}
+    look: Load during the outage spikes to about 40,000 requests per second, 50 times normal traffic, and there are about 5 attempts per real request. Yet about 1,900 requests are still lost, because clients burn through all their attempts before the server returns.
+    why: |
+      Each failing client fires again as fast as it can. In a real system this extra load stops the server from coming back (it is overwhelmed the moment it starts), and queues and connection pools on both sides fill up.
+  - title: Exponential backoff
+    goal: Double the wait after each failure, starting at 0.2 s.
+    setup: {scenario: outage, strategy: exponential}
+    look: The peak is a tenth of the storm's (about 4,000/s), nothing is lost, and the backlog clears about 6 seconds after the server returns.
+    why: |
+      Waits of 0.2, 0.4, 0.8, 1.6 s… mean each client sends only a handful of attempts during a 3-second outage. Load during an outage grows with log(outage length), not with outage length × retry speed.
+  - title: The thundering herd
+    goal: 2,000 clients connect at once (after a deploy or a network partition heals) to a server that handles 200/s. Use exponential backoff without jitter.
+    setup: {scenario: herd, strategy: exponential}
+    look: The attempts come in tall, synchronised waves. Clients that failed together retry together, collide again, and the last one is served after roughly 50 s.
+    why: |
+      Backoff spaces out each client's attempts but not clients relative to each other. Everyone who failed at t = 0 retries at exactly 0.2 s, then 0.6 s, then 1.4 s…, so the server alternates between flooded and idle.
+  - title: Add jitter
+    goal: Same herd, backoff with full jitter.
+    setup: {scenario: herd, strategy: jitter}
+    look: The waves smear into a steady stream near capacity. Total attempts fall by about a quarter (12,200 vs 16,300) and the last client is served at about 37 s instead of 51 s.
+    why: |
+      Full jitter waits a random time between 0 and the backoff ceiling. Retries spread over the whole interval and the server stays busy instead of alternating between flood and silence. This is why AWS recommends jitter on every retry policy.
+
+deep_dive:
+  - type: heading
+    text: The token bucket
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: refill, label: Refill, sub: "r tokens per second", col: 0, row: 0}
+        - {id: bucket, label: Bucket, sub: "holds at most b tokens", col: 1, row: 0}
+        - {id: req, label: Request, sub: "needs 1 token", col: 0, row: 1}
+        - {id: ok, label: Allowed, col: 2, row: 0}
+        - {id: no, label: "Rejected (429)", sub: "or queued", col: 2, row: 1}
+      edges:
+        - {from: refill, to: bucket}
+        - {from: req, to: bucket}
+        - {from: bucket, to: ok}
+        - {from: bucket, to: no}
+    steps:
+      - title: Tokens drip in
+        md: The bucket gains r tokens per second, up to a maximum of b. A full bucket stops filling, so idle time doesn't build unlimited credit.
+        state: {active: [refill, bucket]}
+      - title: Requests spend tokens
+        md: Each request takes one token. If one is available the request goes through.
+        state: {active: [req, bucket, ok]}
+      - title: Empty bucket, rejection
+        md: "With no tokens the request is rejected, typically with HTTP 429 Too Many Requests and a `Retry-After` header, or held in a queue."
+        state: {active: [bucket, no], bad: [no]}
+      - title: Bursts and the long run
+        md: A full bucket allows a burst of b requests at once, but over any long window the rate can't exceed r. Two numbers, rate and burst, describe the whole policy.
+        state: {active: [refill, bucket, ok]}
+  - type: table
+    columns:
+      - {key: alg, label: Algorithm}
+      - {key: how, label: How}
+      - {key: notes, label: Notes}
+    rows:
+      - {alg: Token bucket, how: "Refill at rate r, burst up to b", notes: "The default (API gateways, AWS, Stripe). Allows bursts"}
+      - {alg: Leaky bucket, how: "Queue drained at a constant rate", notes: "Smooths output; adds queueing delay"}
+      - {alg: Fixed window, how: "Count requests per clock minute", notes: "Simple; allows 2× bursts at window edges"}
+      - {alg: Sliding window, how: "Count over the last 60 s, rolling", notes: "Accurate; more state per client"}
+      - {alg: Concurrency limit, how: "Cap requests in flight", notes: "Protects against slow requests, which rate limits miss"}
+  - type: heading
+    text: Retry policy, done right
+  - type: formula
+    text: "wait(n) = random(0, min(cap, base × 2ⁿ))        (exponential backoff with full jitter)"
+  - type: steps
+    items:
+      - title: Retry only what's retryable
+        md: Timeouts, 429, 503 and connection errors, yes. 400s and validation errors, never; they will fail the same way again.
+      - title: Make the operation idempotent
+        md: A retried payment must not charge twice. Use idempotency keys (see the retries and idempotency module).
+      - title: Back off exponentially, with jitter, with a cap
+        md: Cap both the single wait (e.g. 30 s) and the total attempts or total time. Honour `Retry-After` when the server sends one.
+      - title: Retry at one layer only
+        md: If the browser, the API gateway, the service and its database client each retry 3 times, one failure becomes 3⁴ = 81 attempts at the bottom. Pick one layer, usually the outermost that can.
+      - title: Use a retry budget or circuit breaker
+        md: Allow retries up to, say, 10% of normal traffic. When failures are widespread, a circuit breaker stops calling the failing service for a while and fails fast, letting it recover.
+  - type: callout
+    kind: prod
+    md: "Data pipelines hit rate limits too: extracting from SaaS APIs (Salesforce, Stripe, HubSpot), calling LLM APIs in batch, or backfilling against a production database. Read the provider's limits, run a client-side token bucket below them, and back off with jitter on 429. Parallelising a backfill 50 ways is a self-inflicted thundering herd."
+  - type: related
+    slugs: [queues, tail-latency, caching, retries-idempotency, llm-cost]
+
+interview:
+  - level: junior
+    q: What does HTTP 429 mean and how should a client handle it?
+    answer: Too Many Requests, meaning the client exceeded a rate limit. Wait before retrying, using the Retry-After header if present, otherwise exponential backoff with jitter, and cap the number of attempts.
+    listen_for: [Rate limit, Retry-After, Backoff with jitter]
+  - level: mid
+    q: Why add jitter to exponential backoff?
+    answer: Without it, clients that failed at the same moment retry at the same moments too, so they keep colliding in synchronised waves (a thundering herd). Random waits spread retries over time, keeping load near capacity and finishing sooner with fewer attempts.
+    listen_for: [Synchronised retries, Spreads load, Fewer total attempts]
+  - level: mid
+    q: How would you implement a rate limiter shared by 20 API servers?
+    answer: Keep the counters in a shared store such as Redis with atomic operations (a Lua script or INCR with expiry) for a token bucket or sliding window per client key. Alternatively give each server a local limiter with 1/20th of the budget, which is cheaper but less exact when traffic is uneven. Decide what happens when Redis is unavailable (usually fail open), and return 429 with Retry-After.
+    listen_for: [Shared state with atomic updates, Local approximation trade-off, Failure mode of the limiter, Per-client keys]
+  - level: senior
+    q: A downstream dependency has a 30-second outage and your service stays down for 10 minutes afterwards. What happened and how do you prevent it?
+    answer: Likely a retry storm or a metastable failure. Retries and queued work built up during the outage; when the dependency came back, the backlog plus retries exceeded its capacity, so it failed again, triggering more retries. Prevent it with capped exponential backoff and jitter, retries at a single layer, retry budgets, circuit breakers, load shedding and timeouts shorter than the caller's, and drop work that is already too old to be useful rather than processing a stale backlog.
+    listen_for: [Retry amplification, Backlog exceeds capacity, Circuit breakers or budgets, Load shedding, Drop stale work]

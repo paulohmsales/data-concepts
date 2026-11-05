@@ -1,0 +1,97 @@
+slug: queues
+title: Queues and Little’s law
+track: software-engineering
+summary: why a server at 80% feels fine and at 95% falls over, and what queues, pools and backpressure do about it.
+roles: [swe, de, mgr]
+lab: queues
+order: 1
+
+intuition: |
+  Every system that does work has a queue in front of it: requests waiting for a web server, jobs waiting for an Airflow worker, tickets waiting for the data team. Requests don’t arrive evenly; they come in random bursts. When a burst arrives, some have to wait.
+
+  The surprising part is how *non-linear* waiting is. A server that is busy 50% of the time makes requests wait about as long as the work itself. At 80% busy, the total time is five times the work. At 95%, twenty times. Just below 100%, the queue can grow almost without limit. Nothing is “broken”; that’s simply what randomness plus high utilisation does.
+
+  **Little’s law** ties it together for any stable system: items in the system = arrival rate × time each spends there (L = λ·W). If 10 requests per second each take 0.5 s, 5 are in flight on average. It’s how you size thread pools, connection pools and teams.
+
+experiments:
+  - title: Comfortable at 80%?
+    goal: One server at 80% utilisation; each request needs 100 ms of work.
+    setup: {utilization: 0.8}
+    look: Mean time in the system is about 500 ms, five times the work itself; p95 is over a second.
+    why: |
+      For random arrivals and service times (M/M/1), time in system W = service time / (1 − utilisation) = 0.1 / 0.2 = 0.5 s. The queue absorbs bursts by making requests wait.
+  - title: The last 15% costs everything
+    goal: Push to 95% utilisation.
+    setup: {utilization: 0.95}
+    look: The mean jumps to about 2 seconds and the queue-length chart shows long spikes; on the hockey-stick chart you are far up the wall.
+    why: |
+      1 / (1 − ρ) explodes as ρ → 1: 5× at 80%, 20× at 95%, 50× at 98%. Capacity planning targets 60–75% for latency-sensitive services for this reason, not out of waste.
+  - title: Make the work predictable
+    goal: Same 80%, but every request takes exactly 100 ms.
+    setup: {utilization: 0.8, service: constant}
+    look: Waiting time roughly halves.
+    why: |
+      Queueing comes from variability in both arrivals and service. With constant service times, the Pollaczek–Khinchine formula gives exactly half the M/M/1 wait. Reducing variance (splitting giant jobs, timeouts on stragglers) cuts waits without adding capacity.
+  - title: Pool the servers
+    goal: Two servers sharing one queue, each 80% busy.
+    setup: {utilization: 0.8, servers: 2}
+    look: Mean time drops to under 300 ms, much better than two separate single-server queues at 80% (500 ms each).
+    why: |
+      With one shared queue, a request waits only if *both* servers are busy. Pooling is why one shared worker pool beats one worker per team, and why supermarkets moved to a single snake line.
+  - title: Backpressure
+    goal: 99% utilisation with a queue limit of 10.
+    setup: {utilization: 0.99, capacity: 10}
+    look: Some requests are rejected immediately, but the ones accepted finish in bounded time; without the limit, waits grow huge.
+    why: |
+      An unbounded queue turns overload into unbounded latency for everyone (and often timeouts, which waste the work done). A bounded queue that rejects early (HTTP 429/503) keeps the system responsive and tells clients to back off.
+
+deep_dive:
+  - type: heading
+    text: Watch a queue breathe
+  - type: visual
+    key: swe.queueAnim
+    props: {utilization: 0.7}
+    caption: "Requests arrive at random and are served one at a time. At 70% the line comes and goes. Move the slider past 90% and watch it stop draining."
+  - type: heading
+    text: The formulas worth memorising
+  - type: formula
+    text: |
+      Little’s law (any stable system):   L = λ · W
+      M/M/1 time in system:               W = 1 / (μ − λ) = S / (1 − ρ)       (S = service time, ρ = λ/μ)
+      Waiting only:                        Wq = ρ · S / (1 − ρ)
+      Constant service (M/D/1):            Wq is half of M/M/1
+  - type: worked
+    title: Sizing a connection pool
+    md: |
+      An API handles 400 requests per second and each holds a database connection for 25 ms. Little’s law: average connections in use = 400 × 0.025 = 10. With bursts, size the pool at maybe 15–20, not 10 (that would run it at 100%), and not 200 either (more concurrent queries than the database has cores just moves the queue into the database).
+  - type: heading
+    text: Where you meet this in data work
+  - type: table
+    columns:
+      - {key: where, label: Situation}
+      - {key: queue, label: The queue}
+      - {key: lesson, label: Lesson}
+    rows:
+      - {where: "Airflow / orchestrator workers", queue: "Tasks waiting for a slot", lesson: "A cluster that looks 85% utilised has long task queues; SLAs slip before anything “fails”"}
+      - {where: "Warehouse concurrency", queue: "Queries queued for a warehouse or slots", lesson: "Dashboards at 9 am pile up; scale out (multi-cluster) for concurrency, scale up for big queries"}
+      - {where: "Kafka consumers", queue: "Consumer lag", lesson: "Lag grows without bound once arrival rate exceeds processing rate; capacity = partitions × per-consumer rate"}
+      - {where: "A data team’s request queue", queue: "Tickets", lesson: "A team at 95% utilisation has weeks-long lead times; protecting slack is what makes it responsive"}
+  - type: callout
+    kind: prod
+    md: Monitor queue depth and time in queue, not just CPU. Utilisation alone hides the hockey stick until it’s too late. Set queue limits and timeouts so overload fails fast and visibly, and plan capacity for peak arrival rates, not daily averages.
+  - type: related
+    slugs: [tail-latency, caching, rate-limiting, late-data, agents]
+
+interview:
+  - level: mid
+    q: State Little’s law and use it.
+    answer: "L = λW: the average number of items in a stable system equals the arrival rate times the average time each spends there. E.g. 200 requests/s at 50 ms each means about 10 in flight, which tells you the concurrency (threads, connections) needed at average load before adding headroom for bursts."
+    listen_for: [Correct statement, Stable system, A sizing example, Headroom for bursts]
+  - level: mid
+    q: Why does latency grow so sharply as utilisation approaches 100%?
+    answer: With random arrivals and service times, the waiting time scales like ρ/(1 − ρ). Bursts create queues that a nearly-full server has no spare capacity to drain, so they persist and compound. At 50% busy the wait equals the service time; at 90%, nine times; at 99%, ninety-nine times.
+    listen_for: [1/(1 − ρ) shape, Variability as the cause, Concrete numbers]
+  - level: senior
+    q: Your service’s p99 latency spikes every morning at 9 am although average CPU is only 60%. What’s happening and what do you do?
+    answer: Averages hide the peak. At 9 am the arrival rate approaches capacity (or a dependency’s capacity, such as a DB pool or a downstream service), so queues form. Look at per-minute arrival rate, queue depth and pool waits. Fixes are autoscaling ahead of the peak or capacity for peak, pooled shared queues, smoothing scheduled work away from 9 am, bounding queues with fast rejection, timeouts and backpressure, and reducing per-request variance (caching, splitting heavy endpoints).
+    listen_for: [Peak vs average, Finds the real bottleneck queue, Capacity, smoothing and backpressure options]

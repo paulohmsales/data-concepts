@@ -34,4 +34,8 @@ export const labs: Record<string, ComponentType> = {
   'llm-evals': lazy(() => import('./llm-evals/LlmEvals.tsx')),
   agents: lazy(() => import('./agents/Agents.tsx')),
   'llm-cost': lazy(() => import('./llm-cost/LlmCost.tsx')),
+  queues: lazy(() => import('./queues/Queues.tsx')),
+  'tail-latency': lazy(() => import('./tail-latency/TailLatency.tsx')),
+  caching: lazy(() => import('./caching/Caching.tsx')),
+  'rate-limiting': lazy(() => import('./rate-limiting/RateLimiting.tsx')),
 }

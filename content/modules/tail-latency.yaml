@@ -1,0 +1,87 @@
+slug: tail-latency
+title: Tail latency and fan-out
+track: software-engineering
+summary: why a 1-in-100 slow call makes most requests slow at scale, and how hedged requests rescue the tail.
+roles: [swe, de, ai]
+lab: tail-latency
+order: 2
+
+intuition: |
+  Averages hide the experience of the users who wait longest. A service whose typical call takes 10 ms but whose slowest 1% take half a second has a fine median and an awful **p99** (the latency that 99% of calls beat).
+
+  It gets worse when one user request depends on many calls: a search that queries 100 index shards, a page that calls 30 microservices, an agent that runs 20 tools, a query engine reading 1,000 files. The request is only as fast as its **slowest** call. If each call is slow 1% of the time, a request with 100 calls hits at least one slow call 63% of the time. The rare tail of one component becomes the typical experience of the system.
+
+  You can’t make every call fast, but you can stop waiting for the slow ones. **Hedging** sends a duplicate after a short wait and takes whichever answers first.
+
+experiments:
+  - title: One call, a fine median
+    goal: A single backend with 2% of calls on the slow path.
+    setup: {fanout: 1, slowShare: 0.02}
+    look: p50 about 10 ms, p99 in the hundreds of milliseconds.
+    why: |
+      The median ignores the slow path entirely; with 2% slow calls, p99 lands inside it (with exactly 1% it would sit right on the edge). That’s why SLOs are written on high percentiles, not averages, and why p99.9 matters for big systems.
+  - title: Fan out to 100
+    goal: Every request calls 100 backends and waits for all of them.
+    setup: {fanout: 100}
+    look: Now even the request median is about 400 ms, and 63% of requests contain a slow call.
+    why: |
+      P(all 100 fast) = 0.99¹⁰⁰ ≈ 0.37. The slowest of many draws is almost always from the tail. Large fan-out turns per-component p99 into system p50.
+  - title: Make the slow path rarer
+    goal: Same fan-out, but only 0.1% of calls are slow.
+    setup: {fanout: 100, slowShare: 0.001}
+    look: About 10% of requests are hit; the curve for 0.1% rises far more slowly.
+    why: |
+      At fan-out n you need per-call tail rates well below 1/n. Systems with huge fan-out (search, distributed queries) engineer the p99.9 and p99.99 of each component, not just its p99.
+  - title: Hedge the slow ones
+    goal: Fan-out 100, send a duplicate if a call hasn’t answered after 25 ms.
+    setup: {fanout: 100, hedgeAfter: 25}
+    look: Request p99 collapses from about a second to tens of milliseconds, for only a few percent extra calls.
+    why: |
+      Slowness is usually per call (a GC pause, a busy machine), not per request, so the duplicate is probably fast. Hedging after roughly the p95 of a single call costs about 5% extra load at most, and cuts the tail dramatically. (Dean and Barroso, “The Tail at Scale”.)
+
+deep_dive:
+  - type: heading
+    text: The slowest one decides
+  - type: visual
+    key: swe.fanoutBars
+    caption: One request, 40 backend calls (each bar is one call, log scale). Most finish in about 10 ms; one slow call (red) sets the request’s latency. Reroll a few times.
+  - type: formula
+    text: |
+      P(request hits a slow call) = 1 − (1 − q)ⁿ        q = 1%, n = 100 → 63%
+      request latency = max(latency of its n calls)
+  - type: heading
+    text: Techniques for the tail
+  - type: table
+    columns:
+      - {key: t, label: Technique}
+      - {key: how, label: How}
+      - {key: cost, label: Cost}
+    rows:
+      - {t: Hedged requests, how: "Send a second copy after ~p95 of a single call; use the first answer, cancel the other", cost: "A few % extra load; needs idempotent reads"}
+      - {t: Tied requests, how: "Send to two replicas at once; each cancels the other when it starts processing", cost: "Coordination; near-zero extra work"}
+      - {t: Reduce fan-out, how: "Bigger shards, caching, precomputing aggregates, fewer service hops", cost: "Design effort"}
+      - {t: Good-enough answers, how: "Answer once 95% of shards responded (search results, approximate analytics)", cost: "Slightly incomplete results"}
+      - {t: Fix the slow path, how: "GC tuning, isolating noisy neighbours, timeouts on dependencies, avoiding head-of-line blocking", cost: "Engineering time"}
+  - type: callout
+    kind: warn
+    title: Percentiles don’t average
+    md: You can’t compute a fleet’s p99 by averaging per-host p99s, or a day’s p99 by averaging hourly ones. Aggregate the raw distributions (histograms, t-digests) instead. Also measure latency at the client, including queueing; server-side timers miss the time spent waiting.
+  - type: callout
+    kind: prod
+    md: Data systems have the same shape. A query over 2,000 Parquet files waits for the slowest read, a Spark stage waits for its slowest task (stragglers, skew), and a DAG waits for its slowest upstream. Speculative execution in Spark is hedging.
+  - type: related
+    slugs: [queues, caching, rate-limiting, partitioning, agents]
+
+interview:
+  - level: mid
+    q: Why do we monitor p99 latency instead of the average?
+    answer: The average hides the slowest experiences, which are what users notice and what breaks timeouts upstream. Distributions are skewed, so a small slow tail barely moves the mean but defines p99. And with fan-out, one component’s tail becomes many requests’ typical latency.
+    listen_for: [Skewed distributions, User experience, Fan-out amplification]
+  - level: senior
+    q: A request calls 50 microservices in parallel. Each has a p99 of 200 ms and a median of 20 ms. What will the request’s latency look like, and what would you do?
+    answer: P(all 50 under their p99) = 0.99⁵⁰ ≈ 60%, so about 40% of requests wait at least 200 ms; the request’s median is near the services’ tail. Options are cutting fan-out (aggregate services, cache), hedged or tied requests for idempotent calls, deadlines with partial responses, and attacking each service’s tail (p99.9) directly. Measure end-to-end percentiles at the client.
+    listen_for: [Computes 0.99⁵⁰, Tail becomes typical, Hedging and partial answers, Reducing fan-out]
+  - level: senior
+    q: What are the risks of hedged requests?
+    answer: Extra load (bounded if you hedge only after ~p95, but dangerous when the slowness is caused by overload, because hedging then adds load to a struggling system). They need idempotent or read-only operations, and should cancel the losing request. Cap the hedge rate and disable hedging when error rates or queue depths are high.
+    listen_for: [Load amplification under overload, Idempotency, Cancellation, Adaptive limits]
