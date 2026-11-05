@@ -1,0 +1,40 @@
+.group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.consumer {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface);
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.consumer small {
+  color: var(--fg-2);
+}
+
+.idle {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.over {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, var(--surface));
+}
+
+.part {
+  display: inline-block;
+  padding: 0 0.4rem;
+  margin-right: 0.25rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-soft) 100%, transparent);
+  font-family: ui-monospace, monospace;
+}

@@ -1,0 +1,130 @@
+slug: kafka
+title: Kafka, partitions and consumer lag
+track: data-engineering
+summary: why partitions cap your parallelism, how an uneven assignment or one hot key creates lag that more consumers can't fix, and what a rebalance costs.
+roles: [de, swe]
+lab: kafka
+order: 6
+
+intuition: |
+  Kafka stores streams of messages in **topics**, and each topic is split into **partitions**: ordered, append-only logs. A producer picks a partition from the message key (hash of the key mod the number of partitions), so all messages with the same key land in the same partition, in order.
+
+  Consumers read in a **consumer group**. Each partition is read by exactly one consumer in the group, and one consumer may own several partitions. That gives two hard rules:
+
+  - **Parallelism is capped by partitions.** With 6 partitions, a 7th consumer has nothing to read.
+  - **A partition is only as fast as its one consumer.** If one key carries a big share of traffic, its partition falls behind however many consumers you add.
+
+  **Lag** is how many messages are waiting: the gap between the newest message and the group's committed position. It's the single most important streaming health metric.
+
+experiments:
+  - title: Falling behind
+    goal: 6,000 msg/s into 6 partitions, read by 3 consumers that each handle 1,500/s.
+    setup: {consumers: 3}
+    look: Lag grows by 1,500 messages every second, to 450,000 after 5 minutes (75 seconds of traffic behind).
+    why: |
+      Total capacity is 4,500/s against 6,000/s arriving. Lag that grows steadily is a capacity problem, and adding consumers (up to the partition count) fixes it.
+  - title: Not quite enough
+    goal: 4 consumers. Capacity now equals the producer rate exactly.
+    setup: {consumers: 4}
+    look: Lag still grows by 1,000/s. Consumers 0 and 1 own two partitions each (2,000/s, overloaded); consumers 2 and 3 own one each and sit half idle.
+    why: |
+      Partitions are the unit of work, and 6 doesn't divide evenly among 4. Choose partition counts with many divisors (6, 12, 24, 60), keep consumers a divisor of the partition count, and leave headroom so you aren't at 100%.
+  - title: More consumers than partitions
+    goal: 9 consumers on 6 partitions.
+    setup: {consumers: 9}
+    look: Lag is zero, the same as with 6 consumers, and 3 consumers are idle.
+    why: |
+      Extra consumers are standby capacity at best. To scale beyond 6 you need more partitions, and adding partitions changes which partition each key maps to, breaking per-key ordering during the change.
+  - title: Scaling out, eager rebalance
+    goal: Start under-provisioned and add 3 consumers at 100 s with the classic eager protocol.
+    setup: {consumers: 3, scaleOut: true, protocol: eager}
+    look: Lag jumps from 150k to about 210k right after the scale-out, before draining around 80 s later.
+    why: |
+      In an eager rebalance every consumer stops, gives up all its partitions and re-joins, so nothing is consumed for several seconds while producers keep writing. Frequent rebalances (crashing consumers, long GC pauses, slow processing exceeding max.poll.interval.ms) can keep a group permanently behind.
+  - title: Cooperative rebalance
+    goal: Same scale-out with cooperative-sticky assignment.
+    setup: {consumers: 3, scaleOut: true, protocol: cooperative}
+    look: Peak lag about 155k, and the backlog clears about 20 s sooner.
+    why: |
+      Cooperative rebalancing only pauses the partitions that actually move; the rest keep flowing. Kafka's newer consumer protocol (KIP-848) goes further and moves assignment to the broker.
+  - title: The hot key
+    goal: 6 consumers, enough capacity, but 30% of traffic carries one key.
+    setup: {consumers: 6, hotShare: 0.3}
+    look: Partition 0 gains 1,000 messages of lag every second; the other five are empty. Try 12 partitions and 12 consumers, and it still falls behind.
+    why: |
+      All messages for a key go to one partition, and one partition is read by one consumer. Fix it at the key: salt the hot key (key#0…key#7) and recombine downstream, choose a finer key, or pre-aggregate before producing. Accept that salting gives up strict ordering for that key.
+
+deep_dive:
+  - type: heading
+    text: The moving parts
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: prod, label: Producers, sub: "key → partition", col: 0, row: 0}
+        - {id: p0, label: Partition 0, sub: "leader on broker 1", col: 1, row: 0}
+        - {id: p1, label: Partition 1, sub: "leader on broker 2", col: 1, row: 1}
+        - {id: rep, label: Replicas, sub: "followers on other brokers", col: 2, row: 1}
+        - {id: grp, label: Consumer group, sub: "one owner per partition", col: 2, row: 0}
+        - {id: off, label: Committed offsets, sub: "__consumer_offsets", col: 3, row: 0}
+      edges:
+        - {from: prod, to: p0}
+        - {from: prod, to: p1}
+        - {from: p1, to: rep}
+        - {from: p0, to: grp}
+        - {from: p1, to: grp}
+        - {from: grp, to: off}
+    steps:
+      - title: Keys pick partitions
+        md: Same key, same partition, so per-key order is preserved. There's no ordering across partitions. A null key spreads messages (sticky batching) and gives no ordering.
+        state: {active: [prod, p0, p1]}
+      - title: Replication for durability
+        md: Each partition has a leader and followers on other brokers. With `acks=all` and `min.insync.replicas=2`, a write is acknowledged only once it's on at least two brokers, which survives a broker failure.
+        state: {active: [p1, rep]}
+      - title: One consumer per partition
+        md: The group coordinator assigns partitions to consumers. Rebalances happen when consumers join, leave or time out.
+        state: {active: [p0, p1, grp]}
+      - title: Offsets are the bookmark
+        md: Consumers commit the offset they've processed. After a crash a new owner resumes from the last commit, so anything processed but not yet committed is processed again (at-least-once).
+        state: {active: [grp, off]}
+  - type: heading
+    text: Delivery guarantees
+  - type: table
+    columns:
+      - {key: g, label: Guarantee}
+      - {key: how, label: How}
+      - {key: risk, label: Risk}
+    rows:
+      - {g: At most once, how: "Commit before processing", risk: "Messages lost on crash"}
+      - {g: At least once (default), how: "Process, then commit", risk: "Duplicates after a crash; make processing idempotent"}
+      - {g: Exactly once, how: "Idempotent producer + transactions (read-process-write within Kafka, e.g. Kafka Streams, Flink two-phase commit)", risk: "Only end-to-end if the sink participates; external side effects (emails, API calls) still need idempotency keys"}
+  - type: heading
+    text: Sizing a topic
+  - type: formula
+    text: "partitions ≥ max(target throughput / per-consumer throughput, target throughput / per-partition producer throughput) × headroom"
+  - type: markdown
+    md: |
+      Measure per-consumer throughput with your real processing (a consumer that calls a database is far slower than one that only counts). Add headroom for catch-up after incidents: a group running at 90% of capacity takes 10× as long to drain a backlog as it took to build. Partitions are cheap to have but costly to add later (they reshuffle keys), so over-provision moderately (tens, not thousands) on day one.
+  - type: callout
+    kind: prod
+    md: "Alert on lag in **time** (how old is the oldest unconsumed message?), not only in messages, because 100k messages is nothing for a click stream and a disaster for payments. Watch per-partition lag: total lag hides a single hot partition. Track rebalance frequency too; a group that rebalances every few minutes never catches up."
+  - type: related
+    slugs: [late-data, surge-pricing, queues, retries-idempotency, partitioning]
+
+interview:
+  - level: junior
+    q: What is a partition in Kafka and why does it matter?
+    answer: An ordered, append-only log that is part of a topic. Partitions are the unit of parallelism (one consumer per partition per group) and of ordering (order is guaranteed only within a partition). Messages with the same key go to the same partition.
+    listen_for: [Ordered log, Unit of parallelism, Ordering per partition, Key-based placement]
+  - level: mid
+    q: Consumer lag keeps growing on one partition only. What's going on?
+    answer: Probably a hot key, with a disproportionate share of messages hashing to that partition, or a slow consumer for it (poison messages, an expensive record, a stuck consumer). Adding consumers won't help, because one partition has one consumer. Check per-key volumes, then salt or re-key, pre-aggregate, or fix the slow processing. Check for a consumer stuck in a retry loop too.
+    listen_for: [Hot key or slow consumer, One consumer per partition, Salting or re-keying, Poison message handling]
+  - level: mid
+    q: How do you get exactly-once processing with Kafka?
+    answer: Within Kafka, use idempotent producers and transactions so consuming, processing and producing commit atomically (Kafka Streams or Flink with two-phase commit). For external sinks, make writes idempotent (upserts keyed by message id, or storing offsets with the output in one transaction). In practice, at-least-once delivery plus idempotent processing.
+    listen_for: [Idempotent producer and transactions, Sink must participate, At-least-once plus idempotency]
+  - level: senior
+    q: A topic has 6 partitions and the team wants to scale to 20 consumers. What do you advise?
+    answer: Twenty consumers on 6 partitions leaves 14 idle, so parallelism needs more partitions. Increasing partitions remaps keys (hash mod n), breaking per-key ordering for in-flight keys; do it during low traffic, or create a new topic with the right count and migrate consumers. Choose a count with headroom and good divisors (e.g. 24 or 60), check the per-consumer bottleneck (maybe the sink), and consider whether faster processing per consumer is cheaper.
+    listen_for: [Partition cap on parallelism, Key remapping on increase, Migration strategy, Find the real bottleneck]
