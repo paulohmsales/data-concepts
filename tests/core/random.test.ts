@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mulberry32 } from '../../src/core/random.ts'
+import { binomial, mulberry32 } from '../../src/core/random.ts'
 
 describe('mulberry32', () => {
   it('is reproducible for the same seed', () => {
@@ -28,5 +28,36 @@ describe('mulberry32', () => {
     expect(max).toBeLessThan(1)
     // SE of the mean of U(0,1) is sqrt(1/12/n) ≈ 0.0009; allow ~5 SE.
     expect(Math.abs(sum / n - 0.5)).toBeLessThan(0.005)
+  })
+})
+
+describe('binomial', () => {
+  const check = (n: number, p: number) => {
+    const rng = mulberry32(123)
+    const k = 20_000
+    let sum = 0
+    let sumSq = 0
+    for (let i = 0; i < k; i++) {
+      const x = binomial(n, p, rng)
+      sum += x
+      sumSq += x * x
+    }
+    const mean = sum / k
+    const variance = sumSq / k - mean * mean
+    const trueVar = n * p * (1 - p)
+    // mean within ~5 SE; variance within 5%
+    expect(Math.abs(mean - n * p)).toBeLessThan(5 * Math.sqrt(trueVar / k))
+    expect(Math.abs(variance / trueVar - 1)).toBeLessThan(0.05)
+  }
+
+  it('matches mean and variance (exact path, small p)', () => check(1000, 0.02))
+  it('matches mean and variance (exact path, p > 0.5)', () => check(200, 0.9))
+  it('matches mean and variance (normal path)', () => check(100_000, 0.3))
+
+  it('handles edge cases', () => {
+    const rng = mulberry32(1)
+    expect(binomial(0, 0.5, rng)).toBe(0)
+    expect(binomial(50, 0, rng)).toBe(0)
+    expect(binomial(50, 1, rng)).toBe(50)
   })
 })

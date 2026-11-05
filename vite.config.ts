@@ -6,5 +6,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     include: ['tests/**/*.test.ts'],
+    testTimeout: 30_000, // the acceptance checks run thousands of simulations
   },
 })
