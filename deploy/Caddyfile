@@ -1,0 +1,20 @@
+# Caddy site for data-concepts (D8). Copy to the VPS, e.g. /etc/caddy/Caddyfile or an import.
+# Set SITE_DOMAIN in Caddy's environment (or replace it with the domain). HTTPS is automatic.
+{$SITE_DOMAIN} {
+	root * /srv/data-concepts
+	encode zstd gzip
+
+	# D9, private mode: uncomment, then generate the hash on the VPS with
+	#   caddy hash-password --plaintext '<password>'
+	# basic_auth {
+	# 	{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	# }
+
+	# Vite fingerprints asset names, so they can be cached forever.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# Single-page app: unknown paths (e.g. /ab-testing) serve index.html and React routes them.
+	try_files {path} /index.html
+	file_server
+}

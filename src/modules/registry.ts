@@ -1,5 +1,4 @@
-import type { ComponentType } from 'react'
-import AbTesting from './ab-testing/AbTesting.tsx'
+import { lazy, type ComponentType } from 'react'
 
 export interface ModuleEntry {
   slug: string
@@ -13,6 +12,12 @@ export const modules: ModuleEntry[] = [
     slug: 'ab-testing',
     title: 'A/B testing',
     summary: 'p-values, power, sample size, peeking and the winner’s curse.',
-    Component: AbTesting,
+    Component: lazy(() => import('./ab-testing/AbTesting.tsx')),
+  },
+  {
+    slug: 'snapshots',
+    title: 'Snapshots and incremental loads',
+    summary: 'full reloads, watermarks, SCD2 history, hard deletes, late data and idempotent retries.',
+    Component: lazy(() => import('./snapshots/Snapshots.tsx')),
   },
 ]

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 import { modules } from './modules/registry.ts'
 import Home from './pages/Home.tsx'
@@ -12,6 +13,7 @@ export default function App() {
         </Link>
       </header>
       <main className={styles.main}>
+        <Suspense fallback={<p>Loading…</p>}>
         <Routes>
           <Route path="/" element={<Home />} />
           {modules.map((m) => (
@@ -19,6 +21,7 @@ export default function App() {
           ))}
           <Route path="*" element={<p>Not found.</p>} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   )

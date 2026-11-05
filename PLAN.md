@@ -112,18 +112,35 @@ plus buttons to run:
 **Break it:** a late-arriving row older than the watermark, a hard delete in the source, a retry after the
 source changed mid-run, and running the same job twice (idempotency).
 
-The detailed spec gets written after module 1 ships.
+**Spec (as built, 2026-11-04):**
+- **Clock:** logical integer ticks. Every action takes one tick; an incremental job takes two (extract
+  at t, finish at t+1), so "the source changed mid-run" has somewhere to happen.
+- **Tables:** `source` (id, name, plan, updated_at), `source_log` (every change and when it became
+  visible: the ground truth for "what was true at T"), `target_full`, `target_incr` (no keys, so a buggy
+  job can duplicate), `snap_customers` (SCD2: valid_from, valid_to), `etl_state` (watermark, last run).
+- **Jobs** (`src/core/loads.ts`, SQL behind a small `Db` interface):
+  - full reload: delete and insert in one transaction;
+  - incremental: write = merge (delete the batch's keys, then insert) or append; next watermark =
+    max(updated_at) loaded or job end time; optional crash before saving the watermark; optional source
+    change mid-run;
+  - SCD2 snapshot: check strategy on (name, plan), hard deletes close the current version.
+- **Checks:** each target is compared key by key with the source: ok, stale, missing, ghost, duplicate.
+- **Break it:** eight scripted scenarios (hard delete, late row, crash + append retry, crash + merge
+  retry, mid-run change with each watermark rule, two changes between snapshots, dashboard at T). Each
+  has a test asserting it shows the failure it describes.
+- **Tests:** the same SQL runs on native DuckDB 1.4 (`@duckdb/node-api`) in Vitest and on DuckDB-WASM
+  in the browser.
 
 ## 7. Milestones
 
-| # | Milestone | Done when |
-|---|---|---|
-| M0 | Decisions D1–D8, D10 made | Decision log filled in |
-| M1 | Scaffold | App runs locally, one empty module route, tests run, CI runs tests on push |
-| M2 | A/B core | Core functions written, acceptance tests pass |
-| M3 | A/B UI | Views 1–5 built, all four template parts present |
-| M4 | A/B polish | Explain-back answered, README with GIF, deployed to VPS |
-| M5 | Module 2 | Spec, then the same M2–M4 cycle |
+| # | Milestone | Done when | Status |
+|---|---|---|---|
+| M0 | Decisions D1–D8, D10 made | Decision log filled in | ✅ |
+| M1 | Scaffold | App runs locally, one empty module route, tests run, CI runs tests on push | ✅ |
+| M2 | A/B core | Core functions written, acceptance tests pass | ✅ |
+| M3 | A/B UI | Views 1–5 built, all four template parts present | ✅ |
+| M4 | A/B polish | Explain-back answered, README with GIF, deployed to VPS | README + GIF ✅; deploy files ready (needs D9 + VPS); explain-back: yours |
+| M5 | Module 2 | Spec, then the same M2–M4 cycle | Spec, core, UI ✅; explain-back: yours |
 
 ## 8. Backlog of later modules
 
@@ -173,3 +190,5 @@ data-concepts/
 | D10 | Random seed | Seeded PRNG | Same seed reproduces the same simulation | 2026-11-04 ✅ |
 | – | CI | GitHub Actions: typecheck + tests on push/PR | Repo is on GitHub | 2026-11-04 ✅ |
 | – | Who writes the core | Claude writes all code; you review and answer the explain-back | Your call: focus on understanding, not implementation | 2026-11-04 ✅ |
+| – | Module 2 engine | DuckDB-WASM in the browser, native DuckDB 1.4 in tests, same SQL | Real SQL, tested without a browser | 2026-11-04 ✅ |
+| – | Code splitting | Each module is a lazy route; DuckDB loads only on module 2 | Home and A/B stay ~85 kB gzipped; DuckDB WASM is ~8 MB | 2026-11-04 ✅ |

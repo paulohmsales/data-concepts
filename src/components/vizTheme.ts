@@ -13,6 +13,7 @@ export interface VizTheme {
   axis: string
   series1: string // blue
   series2: string // orange
+  series3: string // aqua
   neutral: string // de-emphasised marks
 }
 
@@ -25,6 +26,7 @@ const LIGHT: VizTheme = {
   axis: '#c3c2b7',
   series1: '#2a78d6',
   series2: '#eb6834',
+  series3: '#1baf7a',
   neutral: '#c3c2b7',
 }
 
@@ -37,6 +39,7 @@ const DARK: VizTheme = {
   axis: '#383835',
   series1: '#3987e5',
   series2: '#d95926',
+  series3: '#199e70',
   neutral: '#52514e',
 }
 
