@@ -24,3 +24,83 @@ check:
 - q: What do you use for new users who have no pre-period data?
   a: |-
     Any pre-assignment information works: a constant (no adjustment for them), signup-time attributes, or the metric over a short window before exposure. CUPED is just regression adjustment on pre-treatment covariates; missing values can be filled with a constant plus an indicator.
+experiments:
+  - title: Free traffic
+    goal: A covariate correlated 0.7 with the outcome.
+    setup: {rho: 0.7, leak: 0}
+    look: Variance kept is about 51%; worth about 2× traffic; power jumps.
+    why: |
+      Variance falls by a factor (1 − ρ²) = 0.51. Halving the variance halves the sample size needed for the same power.
+  - title: A useless covariate
+    goal: Correlation zero.
+    setup: {rho: 0}
+    look: No gain at all. CUPED and the plain difference agree.
+    why: |
+      θ ≈ 0, so nothing is subtracted. CUPED never makes things worse in expectation, but it only helps as much as the covariate predicts.
+  - title: Very predictable users
+    goal: Correlation 0.9.
+    setup: {rho: 0.9}
+    look: Only about 19% of the variance is left, worth about 5× the traffic.
+    why: |
+      1 − 0.81 = 0.19. For stable metrics like revenue per user with a long history, ρ of 0.7–0.9 is common, which is why mature experimentation platforms use CUPED by default.
+  - title: The covariate that eats the effect
+    goal: Use sessions *during* the test as the covariate, which the treatment also changes.
+    setup: {leak: 1}
+    look: On the leak chart, the CUPED estimate sinks well below the true effect.
+    why: |
+      The treatment moved x, so x now carries part of the effect, and subtracting θ·x subtracts it. The variance looks smaller, so the wrong answer comes with a confident interval.
+
+deep_dive:
+  - type: heading
+    text: Subtract what you already knew
+  - type: stepper
+    key: exp.cupedSteps
+    caption: 160 users, half in treatment (orange). The outcome is spend during the test.
+    steps:
+      - title: The outcome on its own
+        md: Treatment users spend a little more on average, but the spread between users is much larger than the effect, so the two groups overlap heavily.
+        state: {phase: 1}
+      - title: Plot it against last month
+        md: Most of the spread is predictable. Heavy spenders last month are heavy spenders now. The line is the regression of the outcome on last month’s value (slope θ).
+        state: {phase: 2}
+      - title: Keep only what last month can’t explain
+        md: Subtract θ × (last month − its mean) from each outcome. The predictable part is gone, the spread shrinks, and the treatment gap, which last month couldn’t know about, remains, now easier to see.
+        state: {phase: 3}
+  - type: formula
+    text: |
+      y′ = y − θ·(x − x̄)        θ = cov(x, y) / var(x)
+      Var(ȳ′) = Var(ȳ) · (1 − ρ²)
+  - type: markdown
+    md: |
+      Because x was measured **before** randomisation, it has the same distribution in both arms, so the adjustment subtracts (in expectation) the same amount from each and leaves the difference unbiased. Only the noise goes. This is exactly a regression of y on treatment and x (ANCOVA); CUPED is that idea packaged for experimentation platforms.
+  - type: worked
+    title: Translating ρ into time
+    md: |
+      A test needs 4 weeks at its current variance. With ρ = 0.6, variance × 0.64, so the same power in about 2.6 weeks. With ρ = 0.8 (× 0.36), about 1.4 weeks.
+  - type: heading
+    text: Choosing the covariate
+  - type: markdown
+    md: |
+      - The **same metric in a pre-period** (e.g. the 2–4 weeks before assignment) is usually the best single covariate.
+      - Anything else measured before assignment works too: tenure, plan, country, device. Several covariates in a regression (CUPAC uses an ML prediction as the covariate) reduce variance further.
+      - **New users** have no history: fill x with a constant (they get no adjustment), or use attributes known at signup.
+      - Never use anything the treatment can affect, including post-assignment activity, the metric itself during the test, or exposures.
+  - type: callout
+    kind: prod
+    md: Compute θ on both arms pooled (or with the treatment indicator in the regression), not separately per arm, and compute the variance of the adjusted metric with the usual formula. Confidence intervals then come out correct, just narrower.
+  - type: related
+    slugs: [ab-testing, regression-to-the-mean, sample-ratio-mismatch]
+
+interview:
+  - level: mid
+    q: What is CUPED and why does it work?
+    answer: Controlled-experiment Using Pre-Experiment Data. Adjust each user’s outcome by subtracting θ times the deviation of their pre-period value from the mean, with θ the regression slope. Pre-period data is independent of assignment, so the expected difference is unchanged, while the variance falls by (1 − ρ²), making tests more sensitive.
+    listen_for: [Pre-period covariate, Unbiased because independent of assignment, Variance × (1 − ρ²)]
+  - level: mid
+    q: How much faster can tests run with ρ = 0.5?
+    answer: Variance × 0.75, so the sample size needed drops by 25%. A 4-week test could reach the same power in about 3 weeks.
+    listen_for: [Correct arithmetic, Links variance to sample size]
+  - level: senior
+    q: Someone proposes using “number of sessions during the experiment” as the CUPED covariate because it correlates better. What’s wrong?
+    answer: The treatment can change sessions, so the covariate carries part of the treatment effect, and adjusting for it biases the estimate (often toward zero) while making the interval narrower, which is confidently wrong. Covariates must be measured before assignment or be provably unaffected by it.
+    listen_for: [Post-treatment covariate, Bias plus false precision, Pre-assignment rule]

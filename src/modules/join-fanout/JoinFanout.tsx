@@ -1,6 +1,5 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useEffect, useState } from 'react'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import QueryTable from '../../components/QueryTable.tsx'
@@ -37,6 +36,11 @@ const REPORTED_SQL = {
 export default function JoinFanout() {
   const { db, error } = useDuckSchema('fanout', FANOUT_SETUP)
   const [reported, setReported] = useState<{ query: string; v: number }[]>([])
+  // experiments select a preset in one of the two SQL labs; remounting the lab runs it
+  const [req, setReq] = useState<{ id: string; n: number } | null>(null)
+  const mine = (presets: Preset[]) => !!req && presets.some((p) => p.id === req.id)
+  const labKey = (presets: Preset[], name: string) => (mine(presets) ? `${name}-${req!.n}` : name)
+  const labInitial = (presets: Preset[]) => (mine(presets) ? req!.id : undefined)
 
   useEffect(() => {
     if (!db) return
@@ -68,28 +72,7 @@ export default function JoinFanout() {
 
   return (
     <ModuleLayout
-      title="Grain and join fan-out"
-      intuition={
-        <>
-          <p>
-            Every table has a <b>grain</b>: what one row means. One row per order, per order line, per
-            payment, per customer-day. Write it down for every model, because almost every wrong number in
-            analytics comes from mixing grains without noticing.
-          </p>
-          <p>
-            When you join an order (one row) to its items (many rows), the order is copied once per
-            item. That is correct, since the join has to put the order next to each item. But the
-            order-level numbers on those copies are now repeated, so summing them counts each order
-            several times. That is <b>fan-out</b>. Two one-to-many joins on the same key multiply:
-            3 items × 2 payments = 6 copies.
-          </p>
-          <p>
-            Nothing errors. The query runs, the row count looks plausible, and the total is simply too
-            big. The fix is to bring each table to the grain you want <em>before</em> joining, and to test
-            the grain (a unique key test) on every model.
-          </p>
-        </>
-      }
+      onPreset={(p) => setReq((r) => ({ id: String(p.preset), n: (r?.n ?? 0) + 1 }))}
       play={
         <>
           <h3>The tables and their grains</h3>
@@ -116,7 +99,7 @@ export default function JoinFanout() {
           {reported.length > 0 && <PlotFigure build={build} label="Reported revenue by join strategy" />}
           <h3>Try it in SQL</h3>
           <p className="lede">This is a real DuckDB database running in your browser. Edit any query.</p>
-          <SqlLab db={db} error={error} presets={PLAY} />
+          <SqlLab key={labKey(PLAY, 'play')} initial={labInitial(PLAY)} db={db} error={error} presets={PLAY} />
         </>
       }
       breakIt={
@@ -125,34 +108,8 @@ export default function JoinFanout() {
             Each preset is a bug that ships to production all the time. Run it, read the note, then try
             to fix it yourself before looking at the fixed version.
           </p>
-          <SqlLab db={db} error={error} presets={BREAK} />
+          <SqlLab key={labKey(BREAK, 'break')} initial={labInitial(BREAK)} db={db} error={error} presets={BREAK} />
         </>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What is the grain of a table, and why write it down?',
-              a: 'What one row represents (one order, one order line, one user per day). Every measure is only safely additive at its own grain; knowing it tells you which joins will repeat rows and which aggregations are valid.',
-            },
-            {
-              q: 'Why does joining orders to order items inflate total revenue?',
-              a: 'The join emits one row per (order, item) pair, so each order’s amount appears once per item. Summing amount over those rows counts each order as many times as it has lines.',
-            },
-            {
-              q: 'Why is SUM(DISTINCT amount) not a fix?',
-              a: 'DISTINCT removes duplicate values, not duplicate rows: two different orders with the same amount collapse into one, so you undercount. You need to deduplicate by key (aggregate to order grain), not by value.',
-            },
-            {
-              q: 'You need revenue, item count and amount paid per customer. How do you structure the query?',
-              a: 'Aggregate each fact table to a common grain first (order or customer) in separate CTEs, then join those one-to-one on the key. Add a uniqueness test on the key at each step.',
-            },
-            {
-              q: 'Why does a WHERE condition on the right table turn a LEFT JOIN into an inner join?',
-              a: 'Unmatched rows have NULLs in the right table’s columns, and any comparison with NULL is not true, so WHERE removes them. Put the condition in the ON clause (or allow IS NULL) to keep unmatched left rows.',
-            },
-          ]}
-        />
       }
     />
   )

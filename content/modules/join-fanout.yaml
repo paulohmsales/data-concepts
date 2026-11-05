@@ -30,3 +30,108 @@ check:
 - q: Why does a WHERE condition on the right table turn a LEFT JOIN into an inner join?
   a: |-
     Unmatched rows have NULLs in the right table’s columns, and any comparison with NULL is not true, so WHERE removes them. Put the condition in the ON clause (or allow IS NULL) to keep unmatched left rows.
+experiments:
+  - title: Inflate revenue with one join
+    goal: Sum order amounts after joining order items.
+    setup: {preset: sumAfterJoin}
+    look: 940 instead of 420, with no error and the order count still 4.
+    why: |
+      The join emits one row per (order, item) pair. Order 101 has 2 items and order 104 has 3, so their amounts appear 2 and 3 times. SUM can’t know some rows are copies.
+  - title: Multiply with two joins
+    goal: Join items and payments to orders at the same time.
+    setup: {preset: twoJoins}
+    look: "Order 104: 6 rows (3 items × 2 payments); its amount, items and payments are all multiplied."
+    why: |
+      Two one-to-many joins on the same key form a cross product per key: items × payments. Each fact table is now repeated by the other one’s count.
+  - title: The SUM(DISTINCT) “fix”
+    goal: Deduplicate with DISTINCT.
+    setup: {preset: sumDistinct}
+    look: 370, now too low.
+    why: |
+      DISTINCT removes repeated *values*, not repeated rows. Orders 102 and 103 both total 50, so one of them vanishes. Deduplicate by key (aggregate to order grain), never by value.
+  - title: Fix it at the right grain
+    goal: Aggregate each table to one row per order before joining.
+    setup: {preset: preAggregate}
+    look: Four rows, one per order, with item and payment totals that match each order’s amount.
+    why: |
+      With every input at order grain, the joins are one-to-one and nothing is repeated. This is the standard pattern for combining several fact tables.
+  - title: The LEFT JOIN that isn’t
+    goal: Count orders per customer since January 5, filtering in WHERE.
+    setup: {preset: leftJoinFilter}
+    look: Davi (no orders) has vanished. Then run “Condition in ON” to get him back with 0.
+    why: |
+      Unmatched rows carry NULLs in the right table’s columns, and `NULL >= date` is not true, so WHERE removes them. Conditions on the right table belong in the ON clause.
+
+deep_dive:
+  - type: heading
+    text: Watch the rows multiply
+  - type: stepper
+    key: ae.fanoutJoin
+    caption: Four orders (one row each) and their seven item lines.
+    steps:
+      - title: Two grains
+        md: "`orders` has one row per order, `order_items` one row per line. Each table’s amounts are correct *at its own grain*."
+        state: {phase: 1}
+      - title: Join
+        md: Each order is copied once per matching line. Copies of the same order carry the same amount (red outlines), so SUM(amount) counts orders 101 and 104 several times. 940 instead of 420.
+        state: {phase: 2}
+      - title: Aggregate first, then join
+        md: Bring items to one row per order (count, total) before joining, and every row is an order again. 420.
+        state: {phase: 3}
+  - type: heading
+    text: The grain is the contract
+  - type: markdown
+    md: |
+      The **grain** is what one row of a table means: one order, one order line, one user per day, one account per month. Every measure is additive only at its grain, and every join either keeps the grain (many-to-one, e.g. order → customer) or changes it (one-to-many, e.g. order → items). A one-to-many join is not a bug; it changes the grain to the *many* side. Bugs happen when you then aggregate a measure that belonged to the *one* side.
+  - type: table
+    columns:
+      - {key: join, label: Join}
+      - {key: result, label: Grain of the result}
+      - {key: safe, label: Safe to SUM}
+    rows:
+      - {join: "order_items → orders (many-to-one)", result: one row per line, safe: "line measures; NOT order.amount"}
+      - {join: "orders → customers (many-to-one)", result: one row per order, safe: "order measures; NOT customer.lifetime_value"}
+      - {join: "orders → items and → payments", result: "one row per (line × payment) per order", safe: "nothing from any of the three tables"}
+  - type: heading
+    text: Four ways to combine facts correctly
+  - type: steps
+    items:
+      - title: Aggregate to a common grain, then join
+        md: CTEs that bring each fact table to order (or customer) grain, joined one-to-one. The default.
+      - title: Join, then aggregate with the right function per side
+        md: "Sum line measures normally; take order measures once per key (e.g. `sum(amount) / count(*) per order`, or `max(amount)` grouped by order) before rolling up. Error-prone; prefer 1."
+      - title: UNION the facts into one long table
+        md: Stack orders, items and payments as rows with a type column (a “fact union” or activity stream), then aggregate. Good for metrics across many event types.
+      - title: Semantic layer
+        md: Define each measure with its grain once (dbt metrics/MetricFlow, LookML, Cube), and let the tool generate fan-out-safe SQL ("symmetric aggregates").
+  - type: code
+    lang: sql
+    caption: A grain test. dbt’s `unique` test on the model’s key does exactly this.
+    code: |
+      SELECT order_id, count(*) AS copies
+      FROM fct_orders
+      GROUP BY order_id
+      HAVING count(*) > 1;
+  - type: callout
+    kind: prod
+    md: Write the grain in every model’s description (“one row per order”), put a uniqueness test on the key, and add a row-count reconciliation between layers (staging rows = mart rows at the same grain). Fan-out bugs survive for months because the numbers look plausible.
+  - type: related
+    slugs: [window-functions, surrogate-keys, funnels]
+
+interview:
+  - level: junior
+    q: What does “grain” mean for a table?
+    answer: What one row represents, e.g. one order, one order line, one user per day. It decides which columns can be summed and what a join will do to the row count.
+    listen_for: [One row means…, Additivity, Joins can change grain]
+  - level: mid
+    q: Revenue in the new dashboard is 2.2× the finance number. Where do you look first?
+    answer: A join fan-out. Look for a one-to-many join (items, payments, events, a dimension with duplicate keys) before the SUM. Check uniqueness of the join keys on the “one” side (a dimension with duplicate keys fans out silently) and compare row counts before and after each join. Then fix by aggregating to order grain first.
+    listen_for: [Suspects fan-out immediately, Checks key uniqueness, Row counts per join step, Pre-aggregation fix]
+  - level: mid
+    q: Why is putting a filter on the right table in the WHERE clause of a LEFT JOIN a bug?
+    answer: Unmatched left rows have NULLs in the right columns; the WHERE condition evaluates to unknown and drops them, so the LEFT JOIN behaves like an INNER JOIN. Move the condition into ON (or add OR col IS NULL deliberately).
+    listen_for: [NULL comparison semantics, Turns into an inner join, Condition in ON]
+  - level: senior
+    q: Design a model that reports revenue, items sold and amount refunded per customer per month.
+    answer: Three fact sources at different grains. Aggregate each to customer × month (orders → revenue, order_items → items, refunds → refunded amount, each by its own event date), then full outer join the three on customer_id and month (or left join onto a customer-month spine so zero months appear). Test uniqueness of (customer_id, month) and reconcile totals with each source.
+    listen_for: [Each fact aggregated to the target grain, A date spine for zeros, Join on the composite key, Tests and reconciliation]

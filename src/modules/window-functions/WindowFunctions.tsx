@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Choice, ResetButton, Toggle } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import SqlLab, { type Preset } from '../../components/SqlLab.tsx'
@@ -64,6 +63,20 @@ export default function WindowFunctions() {
   const [spec, setSpec] = useState(DEFAULTS)
   const [selected, setSelected] = useState(3)
   const [scenario, setScenario] = useState<string | null>(null)
+  const [req, setReq] = useState<{ id: string; n: number } | null>(null)
+  const onPreset = (p: Record<string, unknown>) => {
+    const sc = SCENARIOS.find((x) => x.label === p.scenario)
+    if (sc) {
+      setSpec(sc.spec)
+      setSelected(sc.select)
+      setScenario(sc.label)
+    } else if (p.spec) {
+      setSpec({ ...DEFAULTS, ...(p.spec as Partial<WindowSpec>) })
+      setSelected(Number(p.select ?? 0))
+      setScenario(null)
+    }
+    if (p.preset) setReq((r) => ({ id: String(p.preset), n: (r?.n ?? 0) + 1 }))
+  }
   const { db, error } = useDuckSchema('windows', SALES_SETUP)
   const [duck, setDuck] = useState<(number | null)[] | null>(null)
   const set = <K extends keyof WindowSpec>(k: K) => (v: WindowSpec[K]) => {
@@ -161,30 +174,8 @@ export default function WindowFunctions() {
 
   return (
     <ModuleLayout
-      title="Window functions, step by step"
+      onPreset={onPreset}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A GROUP BY squashes rows into one per group. A <b>window function</b> keeps every row and adds
-            a value computed from <em>other</em> rows: a running total, a rank, the previous value, the
-            share of the store’s total.
-          </p>
-          <p>For each row, three questions decide which other rows it sees:</p>
-          <ol>
-            <li>
-              <b>PARTITION BY</b>: which group am I in? (Without it, the whole table is one group.)
-            </li>
-            <li>
-              <b>ORDER BY</b>: in what order is my group sorted? Rows that tie are <em>peers</em>.
-            </li>
-            <li>
-              <b>The frame</b>: which slice of my sorted group does an aggregate use? The default depends on
-              whether there is an ORDER BY, and it includes peers. That default causes most window bugs.
-            </li>
-          </ol>
-        </>
-      }
       play={
         <>
           <pre className={styles.sql}>{sql}</pre>
@@ -202,31 +193,10 @@ export default function WindowFunctions() {
             )}
           </p>
           <PlotFigure build={buildLine} label="Window result per row, by store" />
-          <p className="try">
-            Sum with ROWS unbounded → current is a running total. Switch to ROWS 2 preceding for a
-            3-row moving sum, then to whole partition for the store total on every row. Turn off
-            PARTITION BY and see the frames cross stores.
-          </p>
         </>
       }
       breakIt={
         <>
-          <div className={styles.buttons}>
-            {SCENARIOS.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                className={scenario === s.label ? styles.bad : undefined}
-                onClick={() => {
-                  setSpec(s.spec)
-                  setSelected(s.select)
-                  setScenario(s.label)
-                }}
-              >
-                ✗ {s.label}
-              </button>
-            ))}
-          </div>
           {scenario ? (
             <>
               <pre className={styles.sql}>{sql}</pre>
@@ -234,37 +204,11 @@ export default function WindowFunctions() {
               {table}
             </>
           ) : (
-            <p className="lede">Pick a scenario: it loads the spec above and selects the row to look at.</p>
+            <p className="lede">Each experiment above loads a spec into the lab and selects the row to look at; the explanation appears here.</p>
           )}
           <h3>Filtering on windows, and gaps</h3>
-          <SqlLab db={db} error={error} presets={LAB} />
+          <SqlLab key={req ? `lab-${req.n}` : 'lab'} initial={req?.id} db={db} error={error} presets={LAB} />
         </>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What is the difference between GROUP BY and a window function?',
-              a: 'GROUP BY returns one row per group; a window function returns every input row, with a value computed over a set of related rows (its partition and frame). Use windows when you need row-level detail plus group context.',
-            },
-            {
-              q: 'What is the default frame when you write SUM(x) OVER (PARTITION BY a ORDER BY b), and why does it matter?',
-              a: 'RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW: from the partition start to the current row including all rows tied on b. With ties, rows share the same running total. Without ORDER BY the default is the whole partition.',
-            },
-            {
-              q: 'Explain the difference between row_number, rank and dense_rank on a tie.',
-              a: 'Two rows tied for second: row_number gives 2 and 3 (arbitrary which), rank gives 2 and 2 then skips to 4, dense_rank gives 2 and 2 then continues with 3.',
-            },
-            {
-              q: 'You dedupe with row_number() OVER (PARTITION BY id ORDER BY updated_at DESC) = 1. What can go wrong?',
-              a: 'If two rows share the latest updated_at, which one survives is arbitrary and can change between runs, making the model non-deterministic. Add a unique tie-breaker to the ORDER BY (e.g. a load id or the raw row hash).',
-            },
-            {
-              q: 'Why can’t you filter on a window function in WHERE?',
-              a: 'Logical order: FROM → WHERE → GROUP BY → HAVING → windows → QUALIFY → SELECT → ORDER BY. WHERE runs before windows exist. Use QUALIFY or wrap the query and filter outside.',
-            },
-          ]}
-        />
       }
     />
   )

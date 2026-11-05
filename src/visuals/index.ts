@@ -18,5 +18,12 @@ export const visuals: Record<string, ComponentType<VisualProps>> = {
   'stats.simpsonMosaic': lazy(() => import('./stats/SimpsonMosaic.tsx')),
   'stats.skillLuck': lazy(() => import('./stats/SkillLuck.tsx')),
   'stats.diceSum': lazy(() => import('./stats/DiceSum.tsx')),
+  'exp.metricLottery': lazy(() => import('./exp/MetricLottery.tsx')),
+  'exp.bhSteps': lazy(() => import('./exp/BhSteps.tsx')),
+  'exp.srmFlow': lazy(() => import('./exp/SrmFlow.tsx')),
+  'exp.cupedSteps': lazy(() => import('./exp/CupedSteps.tsx')),
+  'ae.fanoutJoin': lazy(() => import('./ae/FanoutJoin.tsx')),
+  'ae.windowFrame': lazy(() => import('./ae/WindowFrame.tsx')),
+  'ae.keyShift': lazy(() => import('./ae/KeyShift.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }

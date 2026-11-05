@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -94,25 +93,8 @@ export default function Srm() {
 
   return (
     <ModuleLayout
-      title="Sample ratio mismatch"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            You planned a 50/50 split. Randomisation is a coin flip per user, so the arms are never
-            exactly equal, but with 100,000 users they should be within a few hundred of each other.
-            When they are off by more than chance allows, something is removing or adding users in
-            one arm <em>after</em> randomisation: a redirect that drops some, a crash on one variant,
-            bots filtered unevenly, a tracking event that fires later in B.
-          </p>
-          <p>
-            That is a <b>sample ratio mismatch</b> (SRM), and it is serious. The users who went missing
-            are rarely a random subset, so the arms are no longer comparable and the A/B result can’t
-            be trusted, however good it looks. The check is a chi-square test of the counts against
-            the planned split. It is cheap, so run it on every experiment before reading any metric.
-          </p>
-        </>
-      }
       play={
         <>
           <h3>Is this split suspicious?</h3>
@@ -122,11 +104,6 @@ export default function Srm() {
             <Stat label="SRM p-value" value={pValue(test.p)} note={test.p < ALARM ? <Status level="bad">mismatch: don’t trust the results</Status> : <Status level="good">consistent with 50/50</Status>} />
           </StatRow>
           <PlotFigure build={buildCurve} label="SRM p-value against observed share at the current sample size" />
-          <p className="try">
-            Keep 50.3% in B and drag the users up. At 10,000 it is noise; at 1,000,000 it is an
-            alarm. The bigger the experiment, the smaller the imbalance needed to prove something is
-            broken. People get this backwards: “it’s only 0.3%” is no comfort at a million users.
-          </p>
         </>
       }
       breakIt={
@@ -155,35 +132,7 @@ export default function Srm() {
             <Stat label="SRM check says" value={one.srm.p < ALARM ? <Status level="bad">mismatch</Status> : <Status level="good">ok</Status>} note={`p ${pValue(one.srm.p)}`} />
             <Stat label={`Over ${leak.runs} reruns`} value={`${pct(leak.wins, 0)} “B wins”`} note={`SRM flagged ${pct(leak.flagged, 0)} of them`} />
           </StatRow>
-          <p className="try">
-            Set the loss to 0%: “B wins” falls to a few percent (about α/2, the one-sided false
-            positives) and SRM stays quiet. At 5% the fake win shows up in about a quarter of reruns, but
-            SRM already flags three in four; by 15% the fake win is near certain and SRM flags every
-            run. The check fails loudly exactly when the metric is lying.
-          </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What is a sample ratio mismatch, and how do you test for it?',
-              a: 'The observed arm sizes differ from the planned allocation by more than randomisation explains. Test with a chi-square goodness-of-fit test of the counts against the planned shares; a very small p-value (often < 0.001) means something after assignment is adding or dropping users unevenly.',
-            },
-            {
-              q: 'Why does an SRM invalidate the metric comparison, even if the metric difference is significant?',
-              a: 'Randomisation guaranteed comparable arms only before the loss. Whatever removed users from one arm usually removed a non-random kind (slow connections, bots, impatient users), so the arms now differ in composition and the metric gap mixes the treatment effect with that selection.',
-            },
-            {
-              q: 'A 50/50 test has 500,400 vs 499,600 users. Is that a problem?',
-              a: 'Gap 800, chi-square = 800²/1,000,000 = 0.64, p ≈ 0.42: no. Compare with 502,000 vs 498,000: chi-square 16, p ≈ 0.00006: investigate.',
-            },
-            {
-              q: 'Name three common causes of SRM.',
-              a: 'Variant-specific crashes or slow loads that stop logging; redirects or extra page loads in one arm; bot filtering or user de-duplication that hits arms unevenly; assignment happening at a different point than exposure logging; and carry-over from a previous experiment with the same bucketing.',
-            },
-          ]}
-        />
       }
     />
   )

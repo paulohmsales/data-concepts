@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Choice, ResetButton, SeedControl } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -146,24 +145,8 @@ export default function MultipleComparisons() {
 
   return (
     <ModuleLayout
-      title="Multiple comparisons"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A 5% significance level means one test with no real effect fools you 5% of the time. Now
-            check 20 metrics, or slice by 20 segments, or ship 20 variants. Each is another 5% lottery
-            ticket, and the chance that <em>at least one</em> comes up “significant” by luck is 64%.
-          </p>
-          <p>
-            Corrections raise the bar. <b>Bonferroni</b> tests each at α/m, so the chance of any false
-            positive stays under α, at a real cost in power. <b>Holm</b> does the same job a little less
-            harshly. <b>Benjamini–Hochberg</b> controls something different: the share of your “wins”
-            that are false (the false discovery rate). It is the usual choice when you screen many
-            things and can tolerate a few duds.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>One family of {deferred.m} tests</h3>
@@ -180,11 +163,6 @@ export default function MultipleComparisons() {
           <h3>Over many families</h3>
           <p className="lede">The same setup rerun 1,500 times, for every correction. Dashed line: α.</p>
           <PlotFigure build={buildRates} label="Family-wise error, false discovery rate and power by correction" />
-          <p className="try">
-            Set real effects to 0. Without a correction, “P(any false positive)” is huge; Bonferroni
-            and Holm pull it to α. Then set 30 of 100 real: BH finds far more of them than Bonferroni
-            while keeping the false-discovery share below α.
-          </p>
         </div>
       }
       breakIt={
@@ -203,28 +181,6 @@ export default function MultipleComparisons() {
             for the ones you do test, or confirm a surprising segment in a fresh experiment.
           </p>
         </>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'You test 10 independent metrics at α = 0.05 and none has a real effect. What is the chance at least one is significant?',
-              a: '1 − 0.95¹⁰ ≈ 40%.',
-            },
-            {
-              q: 'What is the difference between controlling the family-wise error rate and the false discovery rate?',
-              a: 'FWER (Bonferroni, Holm) controls the chance of making even one false claim: strict, good when any false positive is costly. FDR (Benjamini–Hochberg) controls the expected share of false claims among your claims: you accept some duds in exchange for much more power, which suits screening many hypotheses.',
-            },
-            {
-              q: 'Why is Holm never worse than Bonferroni?',
-              a: 'It uses α/m only for the smallest p-value, then α/(m−1), α/(m−2)… for the next ones, stopping at the first failure. It still controls the FWER but rejects at least as many hypotheses as Bonferroni.',
-            },
-            {
-              q: 'After a flat test, an analyst finds “B wins for Android users in Brazil, p = 0.01”. What do you do?',
-              a: 'Treat it as a hypothesis, not a result: it is one of many slices that could have been reported, so its p-value is not 0.01 in any meaningful sense. Count how many slices were looked at, correct for them, and if it still matters, run a new test targeted at that segment.',
-            },
-          ]}
-        />
       }
     />
   )

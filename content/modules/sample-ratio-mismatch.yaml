@@ -24,3 +24,87 @@ check:
 - q: Name three common causes of SRM.
   a: |-
     Variant-specific crashes or slow loads that stop logging; redirects or extra page loads in one arm; bot filtering or user de-duplication that hits arms unevenly; assignment happening at a different point than exposure logging; and carry-over from a previous experiment with the same bucketing.
+experiments:
+  - title: Same imbalance, different verdicts
+    goal: 50.3% in B with 10,000 users, then with 1,000,000.
+    setup: {n: 10000, share: 0.503}
+    look: At 10,000 the SRM p-value is large (fine). Drag users up to 1,000,000 with the same 50.3% and it becomes a clear alarm.
+    why: |
+      Chance imbalance shrinks like 1/√n, so a fixed percentage gap becomes ever less plausible as n grows. “It’s only 0.3%” is no comfort at a million users.
+  - title: The leaky variant
+    goal: B’s slow page loses 10% of its low-intent users before they are logged; B truly does nothing.
+    setup: {leak: 0.1, lift: 0}
+    look: The A/B test calls B a winner in most reruns, and the SRM check flags every one of them.
+    why: |
+      The users B lost were the ones least likely to convert, so B’s logged users are better on average. The comparison mixes the treatment with a selection effect, and the SRM is the symptom.
+  - title: No leak, no alarm
+    goal: Remove the leak.
+    setup: {leak: 0}
+    look: SRM stays quiet and “B wins” falls to a few percent.
+    why: |
+      With assignment intact, the arms are comparable, false wins happen at about α/2 (one-sided), and the chi-square p-values are uniform, flagging about 0.1% of runs at p < 0.001.
+  - title: A leak that hides a real loss
+    goal: B is truly 5% worse, but leaks 15% of low-intent users.
+    setup: {leak: 0.15, lift: -0.05}
+    look: B can look neutral or even better despite hurting conversion.
+    why: |
+      Selection can mask harm as easily as it fakes wins. With an SRM, neither direction of the result can be trusted.
+
+deep_dive:
+  - type: heading
+    text: Where the users went
+  - type: stepper
+    key: exp.srmFlow
+    caption: Each dot is a visitor, assigned by a fair coin. High-intent visitors (blue) are the ones who usually buy.
+    steps:
+      - title: A fair split
+        md: Randomisation sends 40 visitors to each arm, with the same mix of intent on both sides.
+        state: {phase: 1}
+      - title: B’s page is slower
+        md: Some impatient visitors leave B before the tracking event fires. They were assigned to B, but they never appear in B’s logs.
+        state: {phase: 2}
+      - title: The logs are no longer comparable
+        md: B now has fewer users, and a larger share of them are high intent. B’s conversion rate will look better even though the page did nothing for anyone. The arm sizes are the only visible clue.
+        state: {phase: 3}
+  - type: heading
+    text: The check
+  - type: formula
+    text: "χ² = Σ (observed − expected)² / expected        df = arms − 1"
+    caption: With a planned 50/50 split and N users, expected = N/2 in each arm. Flag at p < 0.001 (strict, because every experiment runs this check).
+  - type: worked
+    title: 50,400 vs 49,600
+    md: |
+      N = 100,000, expected 50,000 each. χ² = 400²/50,000 + 400²/50,000 = 6.4, p ≈ 0.011. Suspicious but not an alarm at 0.001. The same 50.4% split with 1,000,000 users gives χ² = 64, p ≈ 10⁻¹⁵: certainly broken.
+  - type: heading
+    text: Common causes
+  - type: markdown
+    md: |
+      - **Logging loss correlated with the variant:** slower pages, crashes, a tracking call moved later in the flow.
+      - **Redirects:** B redirects to a new URL and loses users (and referrer data) on the way.
+      - **Bot filtering:** bots behave differently in each arm and get filtered unevenly.
+      - **Assignment and exposure at different points:** assigned at login, logged only on reaching the page, and B changes who reaches it.
+      - **Interaction with other experiments** or with caching (CDNs serving one variant more).
+      - **Data pipeline issues:** a join that drops users with missing attributes more often in one arm.
+  - type: callout
+    kind: warn
+    title: Don’t “fix” the ratio
+    md: Reweighting or trimming the bigger arm doesn’t repair an SRM. The users who went missing are not random, and that is the problem. Find the cause, fix it, and rerun.
+  - type: callout
+    kind: prod
+    md: Run the SRM check automatically on every experiment, overall and per day and segment (an SRM that appears on one browser or one day points straight at the cause), and block result dashboards until it passes.
+  - type: related
+    slugs: [ab-testing, multiple-comparisons, funnels]
+
+interview:
+  - level: mid
+    q: What is a sample ratio mismatch and why do you check it before reading results?
+    answer: The observed split between arms differs from the planned one by more than chance allows, found with a chi-square test on the counts. It means something after randomisation removed or added users unevenly, usually a non-random subset, so the arms are no longer comparable and the metric difference can’t be trusted in either direction.
+    listen_for: [Chi-square on counts, Post-randomisation loss, Non-random subset, Invalidates results]
+  - level: mid
+    q: Your 50/50 test shows 1,012,000 vs 988,000 users. What do you do?
+    answer: The gap is 24,000 on 2 million, so χ² = 288 and p is essentially zero. That’s an SRM. Stop reading the metrics. Check SRM by day, platform, browser and entry point to localise it; check for redirects, crashes, tracking changes, bot filtering and assignment versus exposure logic. Fix and rerun.
+    listen_for: [Computes or estimates the test, Stops trusting metrics, Debugs by slicing]
+  - level: senior
+    q: Why is an SRM a problem even when the result is in the direction you expected?
+    answer: Because the selection that caused the SRM can manufacture or hide an effect. The missing users differ systematically from those who remained, so the measured difference is treatment plus selection. A “win” with an SRM is unverified, and its size is unknowable.
+    listen_for: [Selection bias in either direction, Not just a power issue]

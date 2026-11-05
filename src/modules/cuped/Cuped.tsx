@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -141,28 +140,8 @@ export default function Cuped() {
 
   return (
     <ModuleLayout
-      title="CUPED: variance reduction"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            Most of the noise in an A/B test is that users differ: heavy users spend a lot in either arm,
-            light users spend little. That spread has nothing to do with the treatment, but it widens
-            every interval and costs you power.
-          </p>
-          <p>
-            You already know a lot about each user’s level from <b>before</b> the experiment started.
-            <b> CUPED</b> subtracts the part of the outcome that last month’s behaviour predicts:
-            y′ = y − θ·(x − x̄), with θ the regression slope of y on x. What remains is mostly the
-            treatment plus the unpredictable part, so variance shrinks by a factor of (1 − ρ²). With
-            ρ = 0.7 that is half the variance, the same as doubling your traffic.
-          </p>
-          <p>
-            Because x was fixed before randomisation, it is unrelated to the treatment, so subtracting it
-            can’t create or remove an effect. That condition is the one Section 3 breaks.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <div className={styles.grid2}>
@@ -187,10 +166,6 @@ export default function Cuped() {
             <Stat label="Power: raw → CUPED" value={`${pct(powerRaw, 0)} → ${pct(powerCuped, 0)}`} note="share of reruns detecting it" />
           </StatRow>
           <PlotFigure build={buildMany} label="Distribution of raw and CUPED estimates across reruns" />
-          <p className="try">
-            Ρ = 0 gives no gain at all (the covariate predicts nothing). ρ = 0.9 keeps only 19% of the
-            variance: a test that needed four weeks could finish in about one.
-          </p>
         </div>
       }
       breakIt={
@@ -209,28 +184,6 @@ export default function Cuped() {
             provably unaffected by it).
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Explain CUPED in two sentences.',
-              a: 'Use each user’s pre-experiment value of the metric to predict their outcome and analyse only the part that prediction can’t explain. That removes variance unrelated to the treatment, shrinking intervals by √(1 − ρ²) without changing the expected effect.',
-            },
-            {
-              q: 'With ρ = 0.6, how much traffic is CUPED worth?',
-              a: 'Variance × (1 − 0.36) = 0.64, so it is equivalent to 1/0.64 ≈ 1.56× the users.',
-            },
-            {
-              q: 'Why must the covariate be measured before the experiment?',
-              a: 'Then it is independent of assignment, so its arm means differ only by chance and adjusting can’t shift the expected difference. A covariate influenced by the treatment carries part of the effect, and adjusting removes that part, biasing the estimate (usually toward zero).',
-            },
-            {
-              q: 'What do you use for new users who have no pre-period data?',
-              a: 'Any pre-assignment information works: a constant (no adjustment for them), signup-time attributes, or the metric over a short window before exposure. CUPED is just regression adjustment on pre-treatment covariates; missing values can be filled with a constant plus an indicator.',
-            },
-          ]}
-        />
       }
     />
   )

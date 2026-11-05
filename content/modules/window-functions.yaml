@@ -33,3 +33,114 @@ check:
 - q: Why can’t you filter on a window function in WHERE?
   a: |-
     Logical order: FROM → WHERE → GROUP BY → HAVING → windows → QUALIFY → SELECT → ORDER BY. WHERE runs before windows exist. Use QUALIFY or wrap the query and filter outside.
+experiments:
+  - title: Running total with ties
+    goal: SUM over ORDER BY day with the default frame, when two sales share a day.
+    setup: {scenario: Running total with ties}
+    look: Both day-2 rows show 35. The “running” total jumps two rows at once.
+    why: |
+      With ORDER BY, the default frame is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW. RANGE treats rows with the same sort value as peers and includes all of them. Ask for ROWS explicitly and add a tie-breaker to the ORDER BY.
+  - title: The last_value surprise
+    goal: last_value(amount) to get each store’s last sale.
+    setup: {scenario: last_value surprise}
+    look: Every row returns its own amount instead of the store’s last one.
+    why: |
+      The default frame ends at the current row, so “the last row of the frame” is the current row. Use ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING, or simply first_value with ORDER BY … DESC.
+  - title: Forgot PARTITION BY
+    goal: A running total without partitioning by store.
+    setup: {scenario: Forgot PARTITION BY}
+    look: Store B’s first row already includes store A’s sales; click a B row to see the frame reach into A.
+    why: |
+      Without PARTITION BY, the whole result set is one window. The running total crosses entity boundaries, which is a silent bug in per-customer or per-account metrics.
+  - title: Non-deterministic dedup
+    goal: row_number() ordered by day only, with a tie.
+    setup: {scenario: row_number on a tie}
+    look: The two day-2 rows could be numbered either way; SQL doesn’t promise which.
+    why: |
+      Rows that tie on the ORDER BY have no defined order. A “keep row_number = 1” dedup on a non-unique ordering can keep a different row on every run. Always add a unique tie-breaker.
+  - title: Filter on a window
+    goal: Keep each store’s best sale.
+    setup: {preset: whereError}
+    look: "An error: window functions aren’t allowed in WHERE. Then try the QUALIFY and subquery presets."
+    why: |
+      Logical order of a SELECT is FROM → WHERE → GROUP BY → HAVING → window functions → QUALIFY → SELECT → ORDER BY. WHERE runs before windows exist. QUALIFY (or an outer query) filters afterwards.
+
+deep_dive:
+  - type: heading
+    text: Watch the frame move
+  - type: visual
+    key: ae.windowFrame
+    props: {frame: range_default}
+    caption: "One store’s sales sorted by day. The current row (▶) walks down; the shaded box is its frame, the rows SUM can see. Switch the frame type: under the default (RANGE), the two day-2 rows are peers and share one frame; ROWS splits them; “2 preceding” slides a fixed-size box."
+  - type: heading
+    text: Three questions per row
+  - type: steps
+    items:
+      - title: Which partition am I in?
+        md: PARTITION BY splits the result into independent groups. Without it, all rows are one group.
+      - title: Where am I in the order?
+        md: ORDER BY sorts each partition. Rows with equal sort keys are peers. Ranking functions and LAG/LEAD only need this step.
+      - title: Which rows does my frame include?
+        md: "For aggregates (SUM, AVG, first/last_value, COUNT), the frame picks a slice around the current row: ROWS counts physical rows, RANGE uses sort-key values (peers move together), GROUPS counts peer groups."
+  - type: table
+    columns:
+      - {key: spec, label: OVER (…)}
+      - {key: frame, label: Default frame}
+      - {key: effect, label: Effect}
+    rows:
+      - {spec: "(PARTITION BY s)", frame: whole partition, effect: "every row sees the partition total"}
+      - {spec: "(PARTITION BY s ORDER BY d)", frame: "RANGE UNBOUNDED PRECEDING → CURRENT ROW", effect: "running total, peers included"}
+      - {spec: "(… ORDER BY d ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)", frame: explicit, effect: "7-row moving window (7 rows, not necessarily 7 days)"}
+  - type: heading
+    text: Patterns you’ll use every week
+  - type: code
+    lang: sql
+    code: |
+      -- latest row per key (dedup), deterministic
+      SELECT * FROM events
+      QUALIFY row_number() OVER (PARTITION BY user_id ORDER BY updated_at DESC, event_id DESC) = 1;
+
+      -- 7-day moving average over a date spine (fill missing days first!)
+      SELECT day, avg(revenue) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS ma7
+      FROM daily_revenue_with_all_days;
+
+      -- gaps and islands: consecutive active days per user
+      SELECT user_id, min(day) AS streak_start, max(day) AS streak_end, count(*) AS days
+      FROM (
+        SELECT user_id, day, day - CAST(row_number() OVER (PARTITION BY user_id ORDER BY day) AS INTEGER) AS grp
+        FROM active_days
+      ) GROUP BY user_id, grp;
+
+      -- share of total and percent rank
+      SELECT store, amount,
+             amount / sum(amount) OVER (PARTITION BY store) AS share,
+             percent_rank() OVER (PARTITION BY store ORDER BY amount) AS pct_rank
+      FROM sales;
+  - type: callout
+    kind: warn
+    title: ROWS is not time
+    md: "`ROWS BETWEEN 6 PRECEDING` means six *rows*. If a day is missing, the window spans eight days. Either join to a date spine so every day has a row, or use a RANGE frame with an interval (`RANGE BETWEEN INTERVAL 6 DAY PRECEDING AND CURRENT ROW`) where supported."
+  - type: callout
+    kind: prod
+    md: Window functions sort each partition, which is usually the most expensive step of a query. On big tables, partition by something that already clusters the data (date, customer), avoid many differently-ordered windows in one query (each needs its own sort), and use named WINDOW clauses so the engine can share them.
+  - type: related
+    slugs: [join-fanout, snapshots, cohorts, funnels]
+
+interview:
+  - level: junior
+    q: What is the difference between row_number, rank and dense_rank?
+    answer: For two rows tied in second place, row_number gives 2 and 3 (in an arbitrary order), rank gives 2 and 2 then skips to 4, and dense_rank gives 2 and 2 then continues with 3.
+    listen_for: [Tie behaviour of each, row_number arbitrary on ties]
+  - level: mid
+    q: Write a query for each customer’s second purchase.
+    answer: |
+      `SELECT * FROM orders QUALIFY row_number() OVER (PARTITION BY customer_id ORDER BY ordered_at, order_id) = 2` (or the same in a subquery with WHERE rn = 2). The order_id tie-breaker keeps it deterministic when two orders share a timestamp.
+    listen_for: [Partition by customer, Ordered by time, Deterministic tie-breaker, QUALIFY or subquery]
+  - level: mid
+    q: Your running total jumps when two events share a timestamp. Why?
+    answer: The default frame with ORDER BY is RANGE … CURRENT ROW, which includes all peers (rows with the same timestamp), so tied rows get the same total. Use ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW and add a unique tie-breaker to the ORDER BY.
+    listen_for: [Default frame is RANGE, Peers, ROWS plus tie-breaker]
+  - level: senior
+    q: Compute the number of distinct active users over a rolling 28 days, per day.
+    answer: COUNT(DISTINCT) is not supported as a window function in most engines. Options are a self-join of each day to activity in the previous 28 days (with a date spine), then count distinct per day; approximate distinct counts with HyperLogLog sketches merged over the window; or precompute each user’s active periods and count overlaps. Mention cost on large data and the trade-off with approximation.
+    listen_for: [Knows COUNT(DISTINCT) OVER is usually not allowed, Self-join over a spine, Sketches such as HLL, Cost awareness]

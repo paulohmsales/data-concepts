@@ -24,3 +24,95 @@ check:
 - q: After a flat test, an analyst finds “B wins for Android users in Brazil, p = 0.01”. What do you do?
   a: |-
     Treat it as a hypothesis, not a result: it is one of many slices that could have been reported, so its p-value is not 0.01 in any meaningful sense. Count how many slices were looked at, correct for them, and if it still matters, run a new test targeted at that segment.
+experiments:
+  - title: Twenty metrics, no effect
+    goal: Test 20 metrics of a change that does nothing, with no correction.
+    setup: {m: 20, real: 0, method: none}
+    look: "Over many families: “P(any false positive)” near 64%. In the dot chart, a few orange dots usually sit below α."
+    why: |
+      Each null test has a 5% chance of a false win; across 20 independent tests the chance that at least one wins is 1 − 0.95²⁰ = 64%. Reporting “the one that worked” is reporting noise.
+  - title: Bonferroni pulls it back
+    goal: Same family, Bonferroni correction.
+    setup: {m: 20, real: 0, method: bonferroni}
+    look: The family-wise error drops to about 5%.
+    why: |
+      Testing each at α/m keeps P(any false positive) ≤ m · α/m = α (by the union bound), whatever the dependence between tests.
+  - title: The power price
+    goal: 3 real effects among 20, with Bonferroni.
+    setup: {m: 20, real: 3, method: bonferroni}
+    look: Compare the power bar of Bonferroni with “None”. Bonferroni finds far fewer of the real effects.
+    why: |
+      A stricter threshold for every test means real but modest effects fall short too. That is the cost of guaranteeing no false positives at all.
+  - title: Screening many hypotheses
+    goal: 100 tests, 30 real, with Benjamini–Hochberg.
+    setup: {m: 100, real: 30, method: bh}
+    look: BH’s power is much higher than Bonferroni’s, and its false discovery rate stays below 5%.
+    why: |
+      BH controls the share of false discoveries among the discoveries, not the chance of any. When many effects are real, it lets more through while keeping the share of duds bounded, which suits screening (genes, features, segments).
+
+deep_dive:
+  - type: heading
+    text: Every test is a lottery ticket
+  - type: visual
+    key: exp.metricLottery
+    caption: One experiment with 20 metrics and no real effect. Rerun it a few times; different metrics “win” each time. Turn on Bonferroni to see most runs come back clean.
+  - type: formula
+    text: "P(at least one false positive in m independent null tests) = 1 − (1 − α)ᵐ        m = 20, α = 0.05 → 64%"
+  - type: heading
+    text: Two kinds of error control
+  - type: table
+    columns:
+      - {key: what, label: Controls}
+      - {key: means, label: Meaning}
+      - {key: how, label: Procedures}
+      - {key: when, label: Use when}
+    rows:
+      - {what: Family-wise error rate (FWER), means: "P(even one false positive) ≤ α", how: "Bonferroni, Holm", when: "A single false claim is costly: confirmatory tests, launch decisions on many metrics"}
+      - {what: False discovery rate (FDR), means: "Expected share of false positives among discoveries ≤ q", how: "Benjamini–Hochberg (BH), Benjamini–Yekutiel", when: "Screening many candidates where a few duds are acceptable"}
+  - type: heading
+    text: Benjamini–Hochberg, step by step
+  - type: stepper
+    key: exp.bhSteps
+    caption: Ten hypotheses from a screen, with q = 0.05.
+    steps:
+      - title: Sort the p-values
+        md: Rank them from smallest (k = 1) to largest (k = m).
+        state: {phase: 1}
+      - title: Draw the line q·k/m
+        md: The threshold grows with rank, from q/m for the smallest p-value up to q for the largest. Circled points sit under it.
+        state: {phase: 2}
+      - title: Reject everything up to the last point under the line
+        md: The fifth p-value (0.024) is under its threshold (0.025), so the first five are discoveries, including the fourth, even though it sits above its own threshold. That “step-up” rule is what gives BH its power.
+        state: {phase: 3}
+      - title: Compare with Bonferroni
+        md: Bonferroni’s flat line at q/m = 0.005 keeps only the first two. Same data, two answers to two different questions.
+        state: {phase: 4}
+  - type: heading
+    text: Holm, the free upgrade
+  - type: markdown
+    md: |
+      Holm’s procedure also controls the FWER but is never less powerful than Bonferroni. Compare the smallest p-value with α/m, the next with α/(m − 1), and so on, stopping at the first that fails. Use Holm wherever you would have used Bonferroni.
+  - type: heading
+    text: Corrections don’t fix a vague question
+  - type: markdown
+    md: |
+      The best multiple-testing control is to test less: **one pre-registered primary metric** decides the launch; secondary and guardrail metrics are reported with corrections; everything else (segments, extra metrics) is exploration that generates hypotheses for the next test. The “garden of forking paths” includes analysis choices too (which outliers to drop, which date range, which model), so write the analysis plan before looking.
+  - type: callout
+    kind: prod
+    md: Experimentation platforms often compute dozens of metrics per test. Make the dashboard say which metric is primary, show corrected p-values (or flag uncorrected ones), and treat a surprising segment result as a new experiment, not a finding.
+  - type: related
+    slugs: [ab-testing, sample-ratio-mismatch, leakage]
+
+interview:
+  - level: junior
+    q: You test 20 metrics in an A/B test. Three are significant at 5%. What do you say?
+    answer: With no real effects at all we would expect about one false positive, and a 64% chance of at least one. Three is a little above that, but before claiming anything I’d check which metric was primary, apply a correction (Holm or BH), and look at the effect sizes and whether the winning metrics make sense together.
+    listen_for: [Expected false positives = m·α, Primary metric, Applies a correction]
+  - level: mid
+    q: Bonferroni vs Benjamini–Hochberg. When would you use each?
+    answer: Bonferroni (or better, Holm) controls the chance of any false positive, for when one wrong claim is costly and the number of tests is small. BH controls the expected share of false discoveries, which is better for screening many hypotheses (features, segments) where you accept some duds in exchange for much more power.
+    listen_for: [FWER vs FDR, Holm over Bonferroni, Matches procedure to the cost of errors]
+  - level: senior
+    q: An analyst finds that the new checkout only helps Android users in Brazil (p = 0.01). How do you respond?
+    answer: Treat it as a hypothesis. It’s one of many segments that could have been reported, so its p-value doesn’t mean what it says. Ask how many segments were examined and correct for them, check whether the effect is plausible (a known bug fix on Android?), and confirm with a fresh test targeted at that segment before acting.
+    listen_for: [Forking paths, Counting comparisons, Replicate before acting]
