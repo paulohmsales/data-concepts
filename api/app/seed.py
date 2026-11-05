@@ -162,6 +162,8 @@ def build(content_dir: Path = DEFAULT_CONTENT, db_path: Path = DEFAULT_DB) -> di
         meta = {k: getattr(m, k) for k in ("slug", "title", "track", "summary", "roles", "lab", "order", "status")}
         # sizes, so the navigation can show progress without loading every module
         meta["counts"] = {"experiment": len(m.experiments), "interview": len(m.interview), "check": len(m.check)}
+        # links between modules, for the concept map
+        meta["related"] = [slug for b in m.deep_dive if b.type == "related" for slug in b.slugs]
         con.execute(
             "INSERT INTO modules VALUES (?, ?, ?, ?, ?, ?)",
             (m.slug, m.track, m.order, m.status, json.dumps(meta, ensure_ascii=False), j(m)),

@@ -18,6 +18,8 @@ export interface ModuleMeta {
   order: number
   status: 'live' | 'draft'
   counts: { experiment: number; interview: number; check: number }
+  /** slugs this module links to (from its deep dive), for the concept map */
+  related?: string[]
 }
 
 export interface Catalog {

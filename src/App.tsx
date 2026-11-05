@@ -14,6 +14,7 @@ const ModulePage = lazy(() => import('./pages/ModulePage.tsx'))
 const Integrations = lazy(() => import('./pages/Integrations.tsx'))
 const IntegrationProvider = lazy(() => import('./pages/IntegrationProvider.tsx'))
 const CheatSheet = lazy(() => import('./pages/CheatSheet.tsx'))
+const ConceptMap = lazy(() => import('./pages/ConceptMap.tsx'))
 
 export default function App() {
   const theme = useTheme()
@@ -81,6 +82,7 @@ export default function App() {
                 <Route path="/roles" element={<Roles />} />
                 <Route path="/platforms" element={<Platforms />} />
                 <Route path="/integrations" element={<Integrations />} />
+                <Route path="/map" element={<ConceptMap />} />
                 <Route path="/integrations/:key" element={<IntegrationProvider />} />
                 <Route path="/:slug/cheatsheet" element={<CheatSheet />} />
                 <Route path="/:slug" element={<ModulePage />} />
