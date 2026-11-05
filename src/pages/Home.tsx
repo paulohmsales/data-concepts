@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import ProgressPanel from '../components/ProgressPanel.tsx'
 import { useCatalog } from '../lib/api.ts'
 import styles from './Pages.module.css'
 
@@ -35,6 +36,8 @@ export default function Home() {
           </Link>
         </div>
       </section>
+
+      <ProgressPanel />
 
       <section className={styles.how}>
         {[

@@ -11,3 +11,17 @@
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.gotIt,
+.gotItOn {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  margin-left: 0.3rem;
+}
+
+.gotItOn {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}

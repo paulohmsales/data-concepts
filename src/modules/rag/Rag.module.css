@@ -1,0 +1,94 @@
+.qPick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+}
+
+.qPick select {
+  width: 100%;
+}
+
+.hits {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.hits li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.8rem;
+  background: var(--surface-2);
+}
+
+.hits li.hitRight {
+  border-left: 3px solid var(--accent);
+}
+
+.hits p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.hitHead {
+  font-size: 0.82rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.score {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.answer {
+  background: color-mix(in srgb, #1baf7a 30%, transparent);
+  color: inherit;
+  padding: 0 0.1em;
+  border-radius: 3px;
+}
+
+.strips {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.stripLabel {
+  color: var(--fg-2);
+}
+
+.bar {
+  position: relative;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.bar span {
+  position: absolute;
+  height: 14px;
+  border-radius: 3px;
+  border-right: 2px solid var(--surface);
+  box-sizing: border-box;
+}
+
+.bar i {
+  position: absolute;
+  bottom: -3px;
+  height: 4px;
+  background: var(--fg);
+  border-radius: 2px;
+}

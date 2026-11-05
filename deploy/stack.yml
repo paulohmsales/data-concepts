@@ -22,6 +22,10 @@ services:
   api:
     image: ${API_IMAGE}
     networks: [network_swarm_public]
+    environment:
+      PROGRESS_DB: /data/progress.db
+    volumes:
+      - progress:/data
     deploy:
       replicas: 1
       update_config:
@@ -38,6 +42,10 @@ services:
         traefik.http.routers.data-concepts-api.tls.certresolver: letsencryptresolver
         traefik.http.routers.data-concepts-api.middlewares: data-concepts-auth
         traefik.http.services.data-concepts-api.loadbalancer.server.port: "8000"
+
+volumes:
+  # learning progress survives redeploys
+  progress:
 
 networks:
   network_swarm_public:

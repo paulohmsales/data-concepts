@@ -35,7 +35,3 @@
   title: Data leadership
   blurb: Prioritising, promising and running data work.
   order: 9
-- key: cloud-platforms
-  title: Cloud platforms
-  blurb: AWS, Google Cloud, Azure, Snowflake and Databricks, side by side.
-  order: 10

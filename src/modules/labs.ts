@@ -29,4 +29,6 @@ export const labs: Record<string, ComponentType> = {
   'gradient-descent': lazy(() => import('./gradient-descent/GradientDescent.tsx')),
   'roc-thresholds': lazy(() => import('./roc/Roc.tsx')),
   'class-imbalance': lazy(() => import('./class-imbalance/ClassImbalance.tsx')),
+  rag: lazy(() => import('./rag/Rag.tsx')),
+  embeddings: lazy(() => import('./embeddings/Embeddings.tsx')),
 }

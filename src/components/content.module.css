@@ -306,3 +306,68 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+
+.tick,
+.tickOn {
+  flex: 0 0 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.tick {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid transparent;
+}
+
+.tick:hover:not(:disabled) {
+  border-color: var(--good);
+}
+
+.tickOn {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.tickOn:hover:not(:disabled) {
+  background: var(--good);
+}
+
+.expDone {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+}
+
+.qText {
+  flex: 1;
+}
+
+.qCheck {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.qDone {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+}
+
+.canAnswer,
+.canAnswerOn {
+  margin-top: 1rem;
+}
+
+.canAnswerOn {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.canAnswerOn:hover:not(:disabled) {
+  background: var(--good);
+  color: #fff;
+}

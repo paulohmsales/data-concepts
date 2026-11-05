@@ -1,0 +1,108 @@
+slug: embeddings
+title: Embeddings and vector search
+track: ai-engineering
+summary: meaning as geometry, cosine vs dot product, and the recall you trade for fast approximate search.
+roles: [ai, mle, de]
+lab: embeddings
+order: 2
+
+intuition: |
+  An **embedding** turns a piece of text into a list of numbers (a vector) such that texts with similar meaning get vectors pointing in similar directions. “My salary is wrong” and “payroll questions go to the people team” share no words, but a good embedding model puts them close together, because it learned from billions of sentences that those words appear in similar contexts.
+
+  Search then becomes geometry: embed the question, find the stored vectors closest to it. Closeness is usually measured by the **cosine** of the angle between vectors, which ignores their length.
+
+  Comparing a query against every stored vector is exact but slow at millions of vectors. **Approximate nearest-neighbour** indexes (IVF, HNSW) look at only a small part of the collection, which is much faster but sometimes misses a true neighbour. Every vector database is a set of choices about that trade-off.
+
+experiments:
+  - title: Meaning without shared words
+    goal: Query “my salary is wrong”.
+    setup: {query: 1, metric: cosine}
+    look: The payroll phrase is the nearest neighbour, with 0 shared keywords (BM25 keyword search couldn’t find it in the RAG module).
+    why: |
+      The vectors encode topic (money, people), not spelling. That is the reason to combine embeddings with keyword search: each catches what the other misses.
+  - title: Length beats meaning
+    goal: Rank by raw dot product instead of cosine, for “how many vacation days do I have”.
+    setup: {query: 4, metric: dot}
+    look: The long, generic “complete employee handbook” jumps to first place; switch back to cosine and it drops.
+    why: |
+      The dot product is cosine × both lengths. Unnormalised vectors from long documents are longer, so they win every query a little. Normalise vectors (then dot = cosine) unless your embedding model was trained for dot product.
+  - title: Fast but lossy
+    goal: Probe only 1 of 32 IVF lists.
+    setup: {nprobe: 1}
+    look: About 3% of the vectors scanned, but recall@10 only about a third.
+    why: |
+      Neighbours near a list boundary live in an adjacent list that wasn’t searched. Probing more lists recovers them, at proportionally more work.
+  - title: The usual sweet spot
+    goal: Probe 8 lists.
+    setup: {nprobe: 8}
+    look: About a quarter of the vectors scanned for about 90% recall; 16 lists give 99%.
+    why: |
+      Recall climbs quickly then flattens, while cost grows linearly. Pick the knee of the curve for your latency budget, and measure recall on your own data, because it depends on how clustered the vectors are.
+
+deep_dive:
+  - type: heading
+    text: Cosine, dot product, distance
+  - type: visual
+    key: ai.cosineAngle
+    caption: "A query vector A and a document vector B. Cosine depends only on the angle; the dot product also grows with B’s length; Euclidean distance mixes both. For normalised vectors all three rank results the same way."
+  - type: formula
+    text: "cos(A, B) = A·B / (‖A‖ ‖B‖)        ‖A − B‖² = ‖A‖² + ‖B‖² − 2 A·B"
+  - type: heading
+    text: Where embeddings come from
+  - type: markdown
+    md: |
+      Embedding models are neural networks trained so that related pairs (a question and its answer, a title and its paragraph, two paraphrases) get similar vectors and unrelated pairs get different ones (contrastive learning). The dimensions don’t mean anything individually; only directions and distances do. Consequences:
+
+      - Similarity reflects the training data. A general model may not know that “SEV1” and “severity-one incident” are the same thing in your company.
+      - Vectors from different models are incomparable. Changing the model means re-embedding everything.
+      - Embeddings blur exact details: product codes, numbers and names often match better with keyword search.
+  - type: heading
+    text: How vector indexes trade recall for speed
+  - type: table
+    columns:
+      - {key: idx, label: Index}
+      - {key: how, label: How it works}
+      - {key: knobs, label: Knobs}
+      - {key: notes, label: Trade-offs}
+    rows:
+      - {idx: Flat (exact), how: "Compare against every vector", knobs: "none", notes: "Perfect recall; fine up to ~100k vectors or on GPUs"}
+      - {idx: "IVF (the lab)", how: "Cluster vectors with k-means; search the nearest nprobe clusters", knobs: "nlist, nprobe", notes: "Cheap to build; recall depends on probes; needs retraining as data drifts"}
+      - {idx: HNSW, how: "A layered graph of near neighbours; greedy walk from a top layer", knobs: "M, efConstruction, efSearch", notes: "Excellent recall/latency; memory-hungry; the default in most vector DBs"}
+      - {idx: "Product quantisation (IVF-PQ)", how: "Compress vectors into short codes", knobs: "code size", notes: "Huge collections in little memory, lower precision; re-score top candidates exactly"}
+  - type: heading
+    text: Using embeddings well
+  - type: steps
+    items:
+      - title: Hybrid search
+        md: Combine keyword (BM25) and vector results (reciprocal rank fusion). Almost always better than either alone.
+      - title: Normalise and pick the model’s metric
+        md: Most text-embedding models expect cosine (normalise, then dot product). Mismatched metrics silently degrade results.
+      - title: Embed the right unit
+        md: Embed chunks of a sensible size (see the RAG module), with titles or section headings prepended so short chunks keep their context.
+      - title: Filter before or during search
+        md: Metadata filters (tenant, permissions, date) must be applied inside the vector search, or a restrictive filter applied afterwards can leave you with no results from the top k.
+      - title: Evaluate on your data
+        md: Recall@k on a golden set for each candidate embedding model; public benchmarks rarely match your documents.
+  - type: callout
+    kind: prod
+    md: "A vector database isn’t always needed. pgvector in Postgres, the vector types in warehouses (BigQuery, Snowflake, Databricks) or a flat index in memory handle a few million vectors well. Choose by scale, filtering needs and operational simplicity, and see the Cloud platforms page for each provider’s option."
+  - type: related
+    slugs: [rag, partitioning]
+
+interview:
+  - level: junior
+    q: What is an embedding?
+    answer: A vector representation of an item (text, image, user) learned so that similar items have nearby vectors. It turns “find similar things” into a nearest-neighbour search in vector space.
+    listen_for: [Vector representation, Learned similarity, Nearest-neighbour search]
+  - level: mid
+    q: "Cosine similarity or dot product: which and why?"
+    answer: Cosine compares direction only; the dot product also rewards vector length. Use what the embedding model was trained with. For most text models, normalise vectors and use cosine (then the dot product is identical). Raw dot products on unnormalised vectors can favour long or generic documents.
+    listen_for: [Length effect, Normalisation, Match the model’s training objective]
+  - level: senior
+    q: Your semantic search works in testing but misses exact product codes users type. What do you do?
+    answer: Embeddings smooth over rare exact tokens, so add keyword search (BM25 or exact-match filters) and fuse the rankings (hybrid search). Possibly route queries that look like codes straight to exact lookup, and include such cases in the evaluation set. Consider a reranker on the merged candidates.
+    listen_for: [Recognises embeddings’ weakness on exact tokens, Hybrid search, Query routing, Evaluation coverage]
+  - level: senior
+    q: How would you choose a vector index for 200 million vectors with tenant filters and a 50 ms p99 budget?
+    answer: Probably HNSW or IVF-PQ in a vector database that supports filtering inside the search (per-tenant partitions or filtered HNSW), with quantisation to fit memory and exact re-scoring of the top candidates. Tune efSearch/nprobe against measured recall@k on real queries and the latency budget, shard by tenant or by vector space, and plan for re-indexing when the embedding model changes.
+    listen_for: [Index type with reasons, Filtering inside search, Memory via quantisation, Measured recall/latency tuning, Model change and re-indexing]

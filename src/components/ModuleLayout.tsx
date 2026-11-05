@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useCatalog } from '../lib/api.ts'
 import { useModule } from '../lib/moduleContext.ts'
+import { mark, moduleFraction, useProgress } from '../lib/progress.ts'
 import Blocks from './blocks/Blocks.tsx'
 import { Experiments, Interview } from './content.tsx'
 import ExplainBack from './ExplainBack.tsx'
@@ -42,6 +43,14 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
     ...(m.check.length ? [{ id: 'check', label: 'Check yourself' }] : []),
   ]
   const active = useScrollSpy(sections.map((s) => s.id))
+  const progress = useProgress()
+  const mp = progress.modules[m.slug]
+  const meta = modules.find((x) => x.slug === m.slug)
+  const fraction = meta ? moduleFraction(meta, mp) : 0
+  // record the visit once per module page (for “continue where you left off”)
+  useEffect(() => {
+    mark(m.slug, 'visit')
+  }, [m.slug])
 
   return (
     <article className={styles.module}>
@@ -51,6 +60,17 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
         </div>
         <h1>{m.title}</h1>
         <p className={styles.promise}>{m.summary.charAt(0).toUpperCase() + m.summary.slice(1)}</p>
+        <div className={styles.progressRow}>
+          <div className={styles.progressBar} aria-label={`${Math.round(fraction * 100)}% done`}>
+            <span style={{ width: `${fraction * 100}%` }} className={fraction >= 1 ? styles.full : undefined} />
+          </div>
+          <span className={styles.progressText}>
+            {fraction >= 1 ? 'Done' : `${Math.round(fraction * 100)}%`} · {mp?.experiment.length ?? 0}/{m.experiments.length} experiments · {mp?.interview.length ?? 0}/{m.interview.length} interview · {mp?.check.length ?? 0}/{m.check.length} checks
+          </span>
+          <button type="button" className={mp?.done ? styles.doneOn : styles.doneBtn} onClick={() => mark(m.slug, 'done', 0, !mp?.done)}>
+            {mp?.done ? '✓ Module done' : 'Mark module done'}
+          </button>
+        </div>
         {m.roles.length > 0 && (
           <div className={styles.roles}>
             {m.roles.map((r) => (
@@ -77,7 +97,7 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
           </section>
           <section id="experiments" className={styles.experiments}>
             <h2>Experiments: break it on purpose</h2>
-            {m.experiments.length > 0 && <Experiments items={m.experiments} onPreset={onPreset} />}
+            {m.experiments.length > 0 && <Experiments items={m.experiments} onPreset={onPreset} slug={m.slug} />}
             {breakIt}
           </section>
         </div>
@@ -108,14 +128,14 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
       {m.interview.length > 0 && (
         <section id="interview" className={styles.text}>
           <h2>Interview</h2>
-          <Interview items={m.interview} />
+          <Interview items={m.interview} slug={m.slug} />
         </section>
       )}
 
       {m.check.length > 0 && (
         <section id="check" className={styles.text}>
           <h2>Check yourself</h2>
-          <ExplainBack questions={m.check} />
+          <ExplainBack questions={m.check} slug={m.slug} />
         </section>
       )}
 

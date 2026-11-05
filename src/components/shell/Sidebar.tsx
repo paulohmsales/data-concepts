@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { useCatalog } from '../../lib/api.ts'
+import { moduleFraction, useProgress } from '../../lib/progress.ts'
+import ProgressDot from '../ProgressDot.tsx'
 import { ChevronIcon } from './icons.tsx'
 import styles from './Shell.module.css'
 
@@ -8,6 +10,8 @@ import styles from './Shell.module.css'
 export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const { pathname } = useLocation()
   const { tracks, modules } = useCatalog()
+  const progress = useProgress()
+  const frac = (slug: string) => moduleFraction(modules.find((m) => m.slug === slug)!, progress.modules[slug])
   const currentTrack = modules.find((m) => `/${m.slug}` === pathname)?.track
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState('')
@@ -51,14 +55,17 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             >
               <ChevronIcon open={open} />
               <span>{title}</span>
-              <span className={styles.count}>{list.length}</span>
+              <span className={styles.count}>
+                {list.filter((m) => frac(m.slug) >= 1).length}/{list.length}
+              </span>
             </button>
             {open && (
               <ul>
                 {list.map((m) => (
                   <li key={m.slug}>
-                    <NavLink to={`/${m.slug}`} className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
-                      {m.title}
+                    <NavLink to={`/${m.slug}`} className={({ isActive }) => `${isActive ? styles.sideLinkActive : styles.sideLink} ${styles.withDot}`} onClick={onNavigate}>
+                      <ProgressDot value={frac(m.slug)} />
+                      <span>{m.title}</span>
                     </NavLink>
                   </li>
                 ))}

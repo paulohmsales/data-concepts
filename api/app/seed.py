@@ -154,6 +154,8 @@ def build(content_dir: Path = DEFAULT_CONTENT, db_path: Path = DEFAULT_DB) -> di
         con.execute("INSERT INTO tracks VALUES (?, ?, ?, ?)", (t.key, t.title, t.blurb, t.order))
     for m in c["modules"]:
         meta = {k: getattr(m, k) for k in ("slug", "title", "track", "summary", "roles", "lab", "order", "status")}
+        # sizes, so the navigation can show progress without loading every module
+        meta["counts"] = {"experiment": len(m.experiments), "interview": len(m.interview), "check": len(m.check)}
         con.execute(
             "INSERT INTO modules VALUES (?, ?, ?, ?, ?, ?)",
             (m.slug, m.track, m.order, m.status, json.dumps(meta, ensure_ascii=False), j(m)),

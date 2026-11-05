@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useCatalog } from '../lib/api.ts'
 import type { ExperimentContent, InterviewContent } from '../lib/content.ts'
+import { mark, useProgress } from '../lib/progress.ts'
 import Markdown from './Markdown.tsx'
 import styles from './content.module.css'
 
@@ -73,15 +74,21 @@ export function Related({ slugs }: { slugs: string[] }) {
 }
 
 /** Guided experiments from content: set it up (via the lab's preset handler), look, then reveal why. */
-export function Experiments({ items, onPreset }: { items: ExperimentContent[]; onPreset?: (params: Record<string, unknown>) => void }) {
+export function Experiments({ items, onPreset, slug }: { items: ExperimentContent[]; onPreset?: (params: Record<string, unknown>) => void; slug?: string }) {
   const [open, setOpen] = useState<number | null>(null)
   const [active, setActive] = useState<number | null>(null)
+  const progress = useProgress()
+  const doneSet = new Set(slug ? (progress.modules[slug]?.experiment ?? []) : [])
   return (
     <ol className={styles.experiments}>
       {items.map((e, i) => (
-        <li key={e.title} className={`${styles.experiment} ${active === i ? styles.expActive : ''}`}>
+        <li key={e.title} className={`${styles.experiment} ${active === i ? styles.expActive : ''} ${doneSet.has(i) ? styles.expDone : ''}`}>
           <div className={styles.expHead}>
-            <span className={styles.expNum}>{i + 1}</span>
+            {slug ? (
+              <Tick checked={doneSet.has(i)} onChange={(v) => mark(slug, 'experiment', i, v)} label={`Experiment ${i + 1} done`} num={i + 1} />
+            ) : (
+              <span className={styles.expNum}>{i + 1}</span>
+            )}
             <div className={styles.expBody}>
               <strong>{e.title}</strong>
               <Markdown md={e.goal} />
@@ -93,6 +100,7 @@ export function Experiments({ items, onPreset }: { items: ExperimentContent[]; o
                 onClick={() => {
                   onPreset(e.setup!)
                   setActive(i)
+                  if (slug) mark(slug, 'experiment', i, true)
                 }}
               >
                 {active === i ? 'Set up ✓' : 'Set it up'}
@@ -117,18 +125,21 @@ export function Experiments({ items, onPreset }: { items: ExperimentContent[]; o
 }
 
 /** Interview questions with a model answer, follow-ups and what a strong answer includes. */
-export function Interview({ items }: { items: InterviewContent[] }) {
+export function Interview({ items, slug }: { items: InterviewContent[]; slug?: string }) {
+  const progress = useProgress()
+  const doneSet = new Set(slug ? (progress.modules[slug]?.interview ?? []) : [])
   return (
     <div className={styles.interview}>
       <p className={styles.interviewIntro}>
         Answer out loud first, with a timer (2–3 minutes each), then compare. The checklist is what an
         interviewer would tick off.
       </p>
-      {items.map((it) => (
-        <details key={it.q} className={styles.question}>
+      {items.map((it, i) => (
+        <details key={it.q} className={`${styles.question} ${doneSet.has(i) ? styles.qDone : ''}`}>
           <summary>
             <span className={`${styles.level} ${styles[it.level]}`}>{it.level}</span>
-            {it.q}
+            <span className={styles.qText}>{it.q}</span>
+            {doneSet.has(i) && <span className={styles.qCheck}>✓</span>}
           </summary>
           <div className={styles.answer}>
             <div className={styles.answerLabel}>A strong answer</div>
@@ -150,9 +161,23 @@ export function Interview({ items }: { items: InterviewContent[] }) {
                 ))}
               </>
             )}
+            {slug && (
+              <button type="button" className={doneSet.has(i) ? styles.canAnswerOn : styles.canAnswer} onClick={() => mark(slug, 'interview', i, !doneSet.has(i))}>
+                {doneSet.has(i) ? '✓ I could answer this' : 'I could answer this'}
+              </button>
+            )}
           </div>
         </details>
       ))}
     </div>
+  )
+}
+
+/** A round tick box with the item number inside until it is ticked. */
+function Tick({ checked, onChange, label, num }: { checked: boolean; onChange: (v: boolean) => void; label: string; num: number }) {
+  return (
+    <button type="button" role="checkbox" aria-checked={checked} aria-label={label} title={checked ? 'Done (click to undo)' : 'Mark as done'} className={checked ? styles.tickOn : styles.tick} onClick={() => onChange(!checked)}>
+      {checked ? '✓' : num}
+    </button>
   )
 }

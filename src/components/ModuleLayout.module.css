@@ -231,3 +231,54 @@
     order: -1;
   }
 }
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.progressBar {
+  width: 180px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progressBar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.progressBar .full {
+  background: var(--good);
+}
+
+.progressText {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.doneBtn,
+.doneOn {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+}
+
+.doneOn {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.doneOn:hover:not(:disabled) {
+  background: var(--good);
+  color: #fff;
+}

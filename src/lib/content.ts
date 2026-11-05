@@ -17,6 +17,7 @@ export interface ModuleMeta {
   lab: string
   order: number
   status: 'live' | 'draft'
+  counts: { experiment: number; interview: number; check: number }
 }
 
 export interface Catalog {

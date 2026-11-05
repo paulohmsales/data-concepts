@@ -35,5 +35,7 @@ export const visuals: Record<string, ComponentType<VisualProps>> = {
   'ml.cvFolds': lazy(() => import('./ml/CvFolds.tsx')),
   'ml.lrBall': lazy(() => import('./ml/LrBall.tsx')),
   'ml.iconArray': lazy(() => import('./ml/IconArray.tsx')),
+  'ai.cosineAngle': lazy(() => import('./ai/CosineAngle.tsx')),
+  'diagram.flow': lazy(() => import('./diagram/Flow.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }

@@ -1,0 +1,151 @@
+slug: rag
+title: "RAG: chunking and retrieval"
+track: ai-engineering
+summary: whether the answer ever reaches the model, and the chunking, overlap, k and vocabulary choices that decide it.
+roles: [ai, mle, de]
+lab: rag
+order: 1
+
+intuition: |
+  An LLM only knows what was in its training data and what you put in front of it. **Retrieval-augmented generation (RAG)** puts the relevant parts of *your* documents into the prompt: split them into chunks, find the chunks most related to the question, paste them in, and ask the model to answer from them.
+
+  The model can only use what retrieval hands it. If the chunk with the answer isn’t among the top k, or the answer was split across two chunks, even a perfect model can only guess. That’s why most RAG quality problems are retrieval problems, and why you can measure a large part of RAG quality without calling a model at all: did the answer text make it into the context?
+
+  The lab uses a small company handbook, twelve questions with known answers, and BM25 keyword search. Every setting you move is a decision real RAG systems make.
+
+experiments:
+  - title: Chunks too small
+    goal: 8-word chunks with no overlap.
+    setup: {size: 8, overlap: 0, k: 3, question: 8}
+    look: The deployment-freeze answer is cut in half, and most questions show “answer cut in half”.
+    why: |
+      An answer longer than a chunk can never be retrieved whole, and short chunks lose the surrounding words that made them findable. The model would get “except on Fridays after” and nothing else.
+  - title: Overlap to the rescue
+    goal: 20-word chunks, no overlap. Note the result, then raise the overlap to 10.
+    setup: {size: 20, overlap: 0, k: 3, question: 0}
+    look: The night-time paging answer straddles a chunk boundary; with overlap it fits inside one chunk. Overall recall rises from about 54% to about 77%.
+    why: |
+      Overlap repeats the last words of each chunk at the start of the next, so a sentence near a boundary appears whole in at least one chunk. You pay for it with more chunks and some duplicate context.
+  - title: k = 1 is brittle
+    goal: Retrieve only the single best chunk.
+    setup: {size: 40, overlap: 10, k: 1, question: 1}
+    look: The stipend question misses, because a different on-call chunk scores slightly higher. Raise k to 3 and it’s found.
+    why: |
+      Keyword scores are noisy. The right chunk is often second or third, so retrieving a few and letting the model (or a reranker) pick is more robust.
+  - title: The vocabulary gap
+    goal: Ask about “salary” when the handbook says “payroll”.
+    setup: {question: 12}
+    look: Not retrieved at any chunk size or k. No keyword in the question appears in the answer.
+    why: |
+      BM25 matches words, not meaning. Dense embeddings (see the Embeddings module) map “salary” near “payroll”; production systems usually combine both (hybrid search) to get exact matches and synonyms.
+  - title: Big chunks, big bills
+    goal: 150-word chunks, k = 5.
+    setup: {size: 150, overlap: 0, k: 5}
+    look: Almost everything that can be found is found, but each question now sends whole documents to the model (hundreds of words).
+    why: |
+      Context isn’t free: every token costs money and latency, and long contexts with lots of irrelevant text make models more likely to miss or misuse the relevant sentence. You want the smallest context that reliably contains the answer.
+
+deep_dive:
+  - type: heading
+    text: The pipeline, and where it breaks
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: docs, label: Documents, sub: "PDFs, wiki, tickets", col: 0, row: 0}
+        - {id: chunk, label: Chunk, sub: "size, overlap, structure", col: 1, row: 0}
+        - {id: index, label: Index, sub: "BM25 and/or embeddings", col: 2, row: 0}
+        - {id: query, label: Question, sub: "from the user", col: 0, row: 1}
+        - {id: retrieve, label: Retrieve top k, sub: "hybrid search, filters", col: 1, row: 1}
+        - {id: rerank, label: Rerank, sub: cross-encoder, col: 2, row: 1}
+        - {id: prompt, label: Build the prompt, sub: "instructions + chunks", col: 3, row: 1}
+        - {id: llm, label: LLM answers, sub: "with citations", col: 3, row: 0}
+      edges:
+        - {from: docs, to: chunk}
+        - {from: chunk, to: index}
+        - {from: query, to: retrieve}
+        - {from: index, to: retrieve}
+        - {from: retrieve, to: rerank}
+        - {from: rerank, to: prompt}
+        - {from: prompt, to: llm}
+    steps:
+      - title: Offline, ingest
+        md: Documents are parsed (the step that quietly loses tables and headers), split into chunks, and indexed. This runs when documents change, not per question.
+        state: {active: [docs, chunk, index]}
+      - title: Online, retrieve
+        md: The question is matched against the index; the top k chunks come back. This is the step the lab measures. Anything missed here is gone for good.
+        state: {active: [query, retrieve, index]}
+      - title: Rerank and assemble
+        md: A cross-encoder rescores the candidates (more accurate, too slow to run on the whole index), and the best few are pasted into the prompt with instructions to answer only from them and cite.
+        state: {active: [retrieve, rerank, prompt]}
+      - title: Generate
+        md: The LLM answers from the context. Good prompts tell it to say “not in the documents” instead of guessing.
+        state: {active: [prompt, llm]}
+      - title: The usual failure
+        md: The answer was in the documents but the chunk never reached the prompt (split, outranked, or worded differently). The model then answers from general knowledge, confidently and wrongly. That is most RAG “hallucinations”.
+        state: {active: [chunk, retrieve, llm], bad: [retrieve], note: "retrieval missed the chunk → the model guesses"}
+  - type: heading
+    text: Chunking strategies
+  - type: table
+    columns:
+      - {key: s, label: Strategy}
+      - {key: how, label: How}
+      - {key: good, label: Good for}
+    rows:
+      - {s: Fixed-size with overlap, how: "N tokens, overlapping by M", good: "A strong default; what the lab does"}
+      - {s: Structure-aware, how: "Split on headings, paragraphs, list items, table rows", good: "Docs with real structure (wikis, contracts, manuals)"}
+      - {s: Semantic, how: "Split where embedding similarity between sentences drops", good: "Long prose without structure"}
+      - {s: "Small-to-big (parent–child)", how: "Retrieve small chunks, send their parent section to the model", good: "Precise matching and enough surrounding context"}
+      - {s: Contextual chunks, how: "Prepend a short summary of the document (title, section) to each chunk before indexing", good: "Chunks that are ambiguous on their own (“the limit is 30 days”)"}
+  - type: heading
+    text: Retrieval that works in production
+  - type: steps
+    items:
+      - title: Hybrid search
+        md: Run BM25 and dense (embedding) search, merge the rankings (reciprocal rank fusion). Keywords catch exact terms, codes and names; embeddings catch paraphrases like salary/payroll.
+      - title: Rerank
+        md: Retrieve 20–50 candidates cheaply, then rescore with a cross-encoder or an LLM and keep the top few. Usually the single biggest quality gain after hybrid search.
+      - title: Filter by metadata
+        md: Restrict to the right product, language, date range, and the documents the user is *allowed* to see (permission-aware retrieval is non-negotiable for internal data).
+      - title: Rewrite the query
+        md: Expand abbreviations, split multi-part questions, or generate a hypothetical answer and search with it (HyDE).
+  - type: heading
+    text: Measure retrieval and generation separately
+  - type: table
+    columns:
+      - {key: layer, label: Layer}
+      - {key: metric, label: Metrics}
+      - {key: needs, label: Needs}
+    rows:
+      - {layer: Retrieval, metric: "recall@k (is the answer in the context?), MRR, nDCG", needs: "Questions with the source passage marked: a golden set like the lab’s"}
+      - {layer: Generation, metric: "faithfulness (claims supported by the context), answer correctness, citation accuracy", needs: "Reference answers, human or LLM judges"}
+      - {layer: End to end, metric: "task success, user feedback, escalation rate", needs: "Production logs"}
+  - type: callout
+    kind: prod
+    md: Start with 50–100 real questions and their source passages before tuning anything. Every change (chunk size, embedding model, reranker, prompt) is then a measurable experiment instead of a vibe check. Failure analysis by category (missing doc, split answer, wrong doc outranked, model ignored context) tells you which layer to fix.
+  - type: related
+    slugs: [roc-thresholds, leakage]
+
+interview:
+  - level: mid
+    q: Design a RAG system to answer questions over a company’s internal documentation.
+    answer: |
+      Clarify: document types and size, how often they change, who may see what, latency and quality bar.
+
+      - **Ingest:** parse documents (keep headings and tables), chunk structure-aware (~300–800 tokens with overlap), store metadata (source, section, permissions, updated time), embed and index in a vector store plus a keyword index; re-index incrementally on change.
+      - **Serve:** hybrid retrieval with permission filters, rerank the top 30 to the best 5, a prompt that requires citations and allows “I don’t know”, and stream the answer.
+      - **Evaluate:** a golden set of questions with source passages (recall@k), faithfulness and correctness judged on a sample, online feedback and escalations.
+      - **Operate:** monitor retrieval hit rates, latency and cost per answer, stale documents, and questions with no good match (content gaps).
+    listen_for: [Clarifying questions, Chunking and metadata, Hybrid retrieval and reranking, Permission-aware, Evaluation with a golden set, Monitoring]
+  - level: mid
+    q: Your RAG bot gives confident wrong answers. How do you debug it?
+    answer: Take a sample of bad answers and check, for each, whether the correct passage was in the retrieved context. If not, it’s a retrieval problem (chunking, vocabulary mismatch, k, missing documents, filters). If it was there, it’s a generation problem (prompt doesn’t force grounding, too much irrelevant context, the model ignores or misreads it). Fix the dominant category first and add those cases to the eval set.
+    listen_for: [Separates retrieval from generation, Inspects the actual context, Categorised failure analysis, Grows the eval set]
+  - level: senior
+    q: When would you choose RAG over fine-tuning, and when both?
+    answer: RAG when the knowledge changes, must be cited, is large, or has per-user permissions. Updating an index is cheap and auditable. Fine-tuning when you need a behaviour or format the model doesn’t do reliably (a tone, a schema, a domain’s style of reasoning), or to make a smaller model good enough at a narrow task. Often both, with a model fine-tuned to use retrieved context well and RAG supplying the facts.
+    listen_for: [Knowledge vs behaviour, Freshness and citations favour RAG, Fine-tune for format, style or cost, Combination]
+  - level: senior
+    q: How do you choose chunk size?
+    answer: Empirically, on a golden set. Measure recall@k and context length across a few sizes and overlaps for your documents and question types. Small chunks match precisely but cut answers and lose context; big chunks contain answers but dilute the match and cost tokens. Structure-aware splits and small-to-big retrieval often beat any single fixed size.
+    listen_for: [Measured, not guessed, The precision vs context trade-off, Structure-aware or parent–child options]

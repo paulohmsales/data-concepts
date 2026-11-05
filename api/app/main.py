@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from . import seed
+from . import progress, seed
 
 DB_PATH = Path(os.environ.get("CONTENT_DB", seed.DEFAULT_DB))
 
@@ -25,6 +25,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="data-concepts API", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
+app.include_router(progress.router)
 
 
 def db() -> sqlite3.Connection:
