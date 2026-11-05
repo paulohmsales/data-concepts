@@ -38,6 +38,7 @@ export const labs: Record<string, ComponentType> = {
   'tail-latency': lazy(() => import('./tail-latency/TailLatency.tsx')),
   caching: lazy(() => import('./caching/Caching.tsx')),
   'dimensional-modeling': lazy(() => import('./dimensional-modeling/DimensionalModeling.tsx')),
+  dbt: lazy(() => import('./dbt/Dbt.tsx')),
   'data-quality': lazy(() => import('./data-quality/DataQuality.tsx')),
   'rate-limiting': lazy(() => import('./rate-limiting/RateLimiting.tsx')),
 }

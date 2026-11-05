@@ -28,10 +28,13 @@ export default function Flow({ props, state }: VisualProps) {
   const active = new Set((state?.active as string[]) ?? nodes.map((n) => n.id))
   const bad = new Set((state?.bad as string[]) ?? [])
   const note = state?.note as string | undefined
+  const compact = Boolean(props.compact)
+  const fs = compact ? 11 : 12.5
+  const fsSub = compact ? 9.5 : 10.5
   const cols = Math.max(...nodes.map((n) => n.col)) + 1
   const rows = Math.max(...nodes.map((n) => n.row)) + 1
   const cellW = (width - 20) / cols
-  const nodeW = Math.min(170, cellW - 26)
+  const nodeW = Math.min(170, cellW - (compact ? 14 : 26))
   const nodeH = 52
   const rowH = 92
   const pos = (n: Node) => ({ x: 10 + n.col * cellW + (cellW - nodeW) / 2, y: 14 + n.row * rowH })
@@ -76,11 +79,11 @@ export default function Flow({ props, state }: VisualProps) {
           return (
             <g key={n.id} transform={`translate(${p.x}, ${p.y})`} opacity={on ? 1 : 0.3} style={{ transition: 'opacity 0.3s' }}>
               <rect width={nodeW} height={nodeH} rx={8} fill={isBad ? 'color-mix(in srgb, #d03b3b 14%, transparent)' : on ? t.surface : t.surface} stroke={isBad ? '#d03b3b' : on ? t.series1 : t.axis} strokeWidth={on ? 2 : 1} />
-              <text x={nodeW / 2} y={n.sub ? 21 : 30} textAnchor="middle" fontSize={12.5} fontWeight={600} fill={t.ink}>
+              <text x={nodeW / 2} y={n.sub ? 21 : 30} textAnchor="middle" fontSize={fs} fontWeight={600} fill={t.ink}>
                 {n.label}
               </text>
               {n.sub && (
-                <text x={nodeW / 2} y={38} textAnchor="middle" fontSize={10.5} fill={t.inkSecondary}>
+                <text x={nodeW / 2} y={38} textAnchor="middle" fontSize={fsSub} fill={t.inkSecondary}>
                   {n.sub}
                 </text>
               )}

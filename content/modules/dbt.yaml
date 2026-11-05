@@ -1,0 +1,135 @@
+slug: dbt
+title: dbt in practice
+track: analytics-engineering
+summary: the DAG and what CI should build when a model changes; view vs table vs incremental as a cost decision; and the project structure that keeps it maintainable.
+roles: [ae, de]
+lab: dbt
+order: 6
+
+intuition: |
+  dbt turns a folder of SELECT statements into a pipeline. Each model is a query; `ref('other_model')` declares a dependency, so dbt knows the order to build things in. The dependencies form a **DAG** (directed acyclic graph) from raw sources to the marts that dashboards read.
+
+  Two everyday decisions follow from that graph:
+
+  - **What to build when something changes.** Building only the edited model is fast but leaves everything downstream untested, and building everything is safe but slow and expensive. dbt's selectors (`model+`, `+model`, `@model`, `state:modified+`) let you pick exactly the affected part of the graph.
+  - **How to materialise each model.** A **view** stores only the SQL, so every query re-runs it. A **table** is rebuilt on a schedule and is cheap to query. An **incremental** model only processes new data each run. Which is cheapest depends on how often the model is queried and how often it is built.
+
+experiments:
+  - title: Build only what you touched
+    goal: Edit stg_customers and build just that model.
+    setup: {changed: stg_customers, selector: only}
+    look: One model built in 1 minute, and five downstream models (red) neither rebuilt nor tested.
+    why: |
+      If you renamed a column, fct_orders and dim_customers would break in production on the next scheduled run, not in your PR. Testing a change means testing its dependants.
+  - title: Model and everything downstream
+    goal: Use stg_customers+.
+    setup: {changed: stg_customers, selector: down}
+    look: 6 models, 19 of 42 build minutes, nothing untested and nothing wasted.
+    why: |
+      This is “slim CI”, `dbt build --select state:modified+ --defer --state prod-artifacts`. It builds modified models and their descendants, and reads unchanged parents from production instead of rebuilding them.
+  - title: The full build
+    goal: Build everything.
+    setup: {changed: stg_customers, selector: all}
+    look: All 42 minutes, 5 models rebuilt for nothing.
+    why: |
+      Safe, and fine for a small project. In a project with thousands of models, full builds in CI take hours and cost real warehouse money on every PR.
+  - title: The @ selector
+    goal: Edit int_sessions and select @int_sessions.
+    setup: {changed: int_sessions, selector: at}
+    look: Everything is rebuilt (8 models for nothing), because marketing_roi also depends on the orders branch.
+    why: |
+      @model adds every parent of every descendant, so the descendants can be built in an empty CI schema. With --defer to production those parents are already available, and model+ is enough.
+  - title: The busy view
+    goal: A 200 GB model as a view, queried 10 times a day.
+    setup: {sizeGb: 200, readsPerDay: 10, buildsPerDay: 1}
+    look: About $25 a day as a view, $3.75 as a daily table, about $1.40 as incremental.
+    why: |
+      Each query on a view re-runs the whole transformation (scanning ~400 GB of inputs). A table pays that once per build and then queries scan a fraction of it. Views suit cheap, rarely queried models such as staging layers.
+  - title: Rebuilding too often
+    goal: Same model, rebuilt hourly.
+    setup: {sizeGb: 200, readsPerDay: 10, buildsPerDay: 24}
+    look: The table now costs about $61 a day, more than the view (about $25); incremental is about $4.60.
+    why: |
+      A full rebuild re-scans everything 24 times a day for a 1% change. Frequent refreshes are the main reason to go incremental.
+  - title: The lookback tax
+    goal: Hourly incremental runs with a 30-day lookback window.
+    setup: {sizeGb: 200, readsPerDay: 10, buildsPerDay: 24, lookbackDays: 30}
+    look: Incremental rises to about $21 a day, close to the view.
+    why: |
+      A lookback re-processes recent days to catch late-arriving data (see Late data and watermarks), and every run pays for it again. Size the window from observed lateness, and consider fewer runs with a long lookback plus frequent runs with a short one.
+
+deep_dive:
+  - type: heading
+    text: How a project is layered
+  - type: table
+    columns:
+      - {key: layer, label: Layer}
+      - {key: what, label: What lives here}
+      - {key: mat, label: Typical materialisation}
+      - {key: tests, label: Typical tests}
+    rows:
+      - {layer: "sources (sources.yml)", what: "Declared raw tables, owned by loaders", mat: "—", tests: "freshness, not_null/unique on keys"}
+      - {layer: "staging (stg_)", what: "One model per source table: rename, cast, clean. No joins", mat: "view", tests: "unique + not_null primary key, accepted_values"}
+      - {layer: "intermediate (int_)", what: "Reusable joins and logic between staging and marts", mat: "ephemeral or view", tests: "grain tests where it matters"}
+      - {layer: "marts (fct_, dim_)", what: "Facts and dimensions people query", mat: "table or incremental", tests: "relationships, business rules, contracts"}
+      - {layer: "exposures", what: "Declared dashboards and apps that read marts", mat: "—", tests: "lineage for impact analysis"}
+  - type: heading
+    text: Selectors you'll use every day
+  - type: table
+    columns:
+      - {key: sel, label: Selector}
+      - {key: means, label: Means}
+    rows:
+      - {sel: "`model`", means: "Just that model"}
+      - {sel: "`model+` / `+model`", means: "With its descendants / with its ancestors (`2+model` limits depth)"}
+      - {sel: "`@model`", means: "Descendants plus all their ancestors (for building from scratch)"}
+      - {sel: "`state:modified+`", means: "Changed since a saved manifest, plus descendants (slim CI)"}
+      - {sel: "`tag:nightly`, `path:marts/finance`", means: "By tag or folder (scheduled jobs per domain)"}
+      - {sel: "`--exclude`", means: "Remove matches, e.g. heavy models from CI"}
+  - type: heading
+    text: An incremental model
+  - type: code
+    lang: sql
+    code: |
+      {{ config(materialized='incremental', unique_key='event_id',
+                incremental_strategy='merge', on_schema_change='append_new_columns') }}
+
+      select event_id, user_id, event_type, occurred_at
+      from {{ ref('stg_events') }}
+      {% if is_incremental() %}
+        -- re-read the last 3 days to pick up late-arriving events
+        where occurred_at >= (select max(occurred_at) from {{ this }}) - interval 3 day
+      {% endif %}
+  - type: steps
+    items:
+      - title: unique_key makes reruns safe
+        md: With a unique key, reprocessing the lookback window updates rows instead of duplicating them (merge or delete+insert). Without one, every lookback appends duplicates.
+      - title: Late data beyond the lookback is lost
+        md: Events older than the window are never picked up. Monitor lateness, and schedule a periodic `--full-refresh` (or a wider weekly run) as a backstop.
+      - title: Logic changes need a full refresh
+        md: Changing the SQL of an incremental model only affects new rows. Old rows keep the old logic until you rebuild with `--full-refresh`.
+      - title: Pick a strategy your warehouse does well
+        md: "merge (Snowflake, BigQuery, Databricks), insert_overwrite by partition (BigQuery, Spark; cheapest for date-partitioned facts), delete+insert, or microbatch (dbt 1.9+: processes one time batch at a time and can backfill by batch)."
+  - type: callout
+    kind: prod
+    md: "Model contracts (`contract: {enforced: true}`) pin a mart's column names and types, so a change that would break consumers fails the build. Combine them with model versions for planned breaking changes, and exposures so `dbt ls --select +exposure:finance_dashboard` lists everything a dashboard depends on."
+  - type: related
+    slugs: [snapshots, late-data, data-quality, dimensional-modeling, partitioning]
+
+interview:
+  - level: junior
+    q: What does ref() do in dbt?
+    answer: It references another model. dbt resolves it to the right schema and table for the target environment, and records the dependency so models build in the correct order and lineage is known.
+    listen_for: [Dependency graph, Environment-aware names, Build order]
+  - level: mid
+    q: When would you use a view, a table, an incremental model or ephemeral?
+    answer: Views for light, rarely queried logic such as staging (always fresh, no storage, but every query re-runs it). Tables for marts queried often where a full rebuild is affordable. Incremental for large, append-mostly facts or frequent refreshes, where reprocessing everything is too slow or expensive (at the cost of complexity around late data and logic changes). Ephemeral for small reusable CTEs that shouldn't exist as objects.
+    listen_for: [Cost of reads vs builds, Freshness, Incremental trade-offs, Ephemeral purpose]
+  - level: mid
+    q: How do you set up CI for a dbt project with 2,000 models?
+    answer: Slim CI. Compare against the production manifest with `state:modified+`, `--defer` to production for unchanged parents, build into a per-PR schema, and run tests on what's built. Add linting (SQLFluff), contract enforcement, and exclude or sample very heavy models. Then clean up PR schemas.
+    listen_for: [state:modified+, --defer, Isolated schema, Tests run in CI]
+  - level: senior
+    q: An incremental model has been silently missing about 2% of events for months. How might that happen and how do you prevent it?
+    answer: Likely late-arriving data older than the lookback window (or a filter on load time vs event time), a missing or wrong unique_key causing overwrites, or a logic change never full-refreshed. Prevent it with reconciliation tests against the source (counts per day), lateness monitoring to size the lookback, scheduled full refreshes or wide reprocessing, and filters on ingestion time rather than event time where appropriate.
+    listen_for: [Lookback vs lateness, Event vs load time, Reconciliation tests, Periodic full refresh]
