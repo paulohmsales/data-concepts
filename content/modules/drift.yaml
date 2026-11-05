@@ -1,0 +1,94 @@
+slug: drift
+title: Monitoring models in production (drift)
+track: machine-learning
+summary: covariate drift vs concept drift, why an input-drift alarm can be a false alarm while real decay goes unnoticed, label delay, and retraining.
+roles: [mle, ds, de]
+lab: drift
+order: 6
+
+intuition: |
+  A model learns the world as it was in its training data. In production the world keeps moving, in two different ways:
+
+  - **Covariate drift:** the inputs change. Customers get younger, a new marketing channel brings different users, a sensor is recalibrated. The relationship between inputs and outcome may be unchanged.
+  - **Concept drift:** the relationship itself changes. The same customer behaviour that used to predict churn no longer does, because a competitor launched or prices changed.
+
+  Input-drift metrics like **PSI** (population stability index) are cheap and immediate, since they only need today's inputs. But they only see the first kind. The second kind only shows in model performance, and performance needs **labels**, which often arrive weeks later (did the customer actually churn?). Good monitoring watches both, and knows which question each one answers.
+
+  The lab tracks a two-feature churn-style model for 26 weeks after launch.
+
+experiments:
+  - title: The scary chart
+    goal: Shift the inputs by 1.5 standard deviations over the period, with no concept drift.
+    setup: {covariateShift: 1.5}
+    look: PSI crosses the 0.25 alert around week 8–9 and reaches about 2.3, a huge drift alarm. The model's AUC stays around 0.85 and calibration stays fine.
+    why: |
+      The model learned P(churn | x), and that relationship hasn't changed. It's simply seeing different x values, which it handles correctly. Not every drift alert means the model is broken; it means look.
+  - title: The silent decay
+    goal: Concept drift 100%, no input drift.
+    setup: {conceptDrift: 1}
+    look: PSI is flat near 0 the whole time while AUC falls from about 0.87 to about 0.55, nearly a coin flip.
+    why: |
+      The inputs look exactly like training data, so every input monitor is green. Only outcome-based monitoring catches it.
+  - title: The label delay
+    goal: Same concept drift, with labels arriving 8 weeks late.
+    setup: {conceptDrift: 1, labelDelay: 8}
+    look: The last 8 weeks are dashed. As of week 25, the latest AUC you can measure is from week 17 (about 0.70), while the true current AUC is about 0.55.
+    why: |
+      With delayed labels you always see the past. Use proxy labels that arrive faster (early engagement drops, support tickets), monitor prediction distributions (sudden shifts in average score), and shorten the feedback loop where the business allows.
+  - title: Scheduled retraining
+    goal: Concept drift 100%, retrain every 2 weeks on the latest 4 weeks of labels (4-week label delay).
+    setup: {conceptDrift: 1, retrainEvery: 2, labelDelay: 4}
+    look: AUC never drops much below 0.8 (the worst week is about 0.78–0.79) and ends around 0.84. The green lines mark retrains, and the model's weights move from x1 towards x2.
+    why: |
+      Retraining on recent data follows the drift with a lag of the label delay plus half the retrain interval. It can't anticipate, but it limits the damage.
+  - title: Fresher labels, better models
+    goal: Same retraining, labels arriving 0 vs 8 weeks late.
+    setup: {conceptDrift: 1, retrainEvery: 2, labelDelay: 0}
+    look: With instant labels AUC ends around 0.87, as good as at launch. With 8-week labels (try it) it ends near 0.79.
+    why: |
+      Under concept drift, the age of your training labels matters more than the retraining schedule. Faster labels are often the best investment in model quality.
+
+deep_dive:
+  - type: heading
+    text: What to monitor
+  - type: table
+    columns:
+      - {key: what, label: Signal}
+      - {key: needs, label: Needs}
+      - {key: catches, label: Catches}
+      - {key: misses, label: Misses}
+    rows:
+      - {what: "Data quality (nulls, ranges, schema)", needs: "Inputs only", catches: "Broken pipelines feeding the model, the most common failure", misses: "Real-world change"}
+      - {what: "Input drift (PSI, KS, Jensen–Shannon)", needs: "Inputs only, immediate", catches: "Covariate drift, new populations", misses: "Concept drift; flags harmless shifts"}
+      - {what: "Prediction drift", needs: "Model outputs, immediate", catches: "Shifts that matter to the model's output", misses: "Concept drift with stable inputs"}
+      - {what: "Performance (AUC, calibration, business KPI)", needs: "Labels, often delayed", catches: "Everything that hurts, eventually", misses: "Nothing, but it's late"}
+      - {what: "Segment performance", needs: "Labels plus segments", catches: "Decay hidden in averages (one country, one channel)", misses: "Small segments are noisy"}
+  - type: formula
+    text: "PSI = Σ over bins (actual% − expected%) × ln(actual% / expected%)        rule of thumb: < 0.1 stable, 0.1–0.25 watch, > 0.25 investigate"
+  - type: heading
+    text: Responding to drift
+  - type: steps
+    items:
+      - title: Check the pipeline first
+        md: Most “drift” is a bug, such as a unit change, a broken join, a feature now always null, or a default value creeping in. Compare against data-quality checks before blaming the world.
+      - title: Ask whether it matters
+        md: Look at performance and calibration on the latest labelled data, overall and by segment. Covariate drift with stable performance may need nothing, or a recalibration.
+      - title: Retrain, with a check
+        md: Retrain on recent data, evaluate against the current model on a recent holdout (champion vs challenger), and promote only if better. Automatic retraining without evaluation can learn from broken data.
+      - title: Fix the feedback loop
+        md: Where possible get labels faster, log predictions with the features used, and keep a small randomised holdout (no model action) so you can measure true performance when the model changes behaviour.
+  - type: callout
+    kind: prod
+    md: Models can change their own future data. A fraud model blocks transactions, so you never learn whether they were fraud; a recommender shapes what users click. Keep a small random exploration or holdout slice so the labels you train on aren't only the ones the model let through.
+  - type: related
+    slugs: [leakage, roc-thresholds, class-imbalance, data-quality, llm-evals]
+
+interview:
+  - level: mid
+    q: What's the difference between covariate drift and concept drift?
+    answer: Covariate drift means the input distribution P(x) changes while P(y|x) stays the same; the model may still be accurate, though calibration on new regions can suffer. Concept drift means P(y|x) changes, so the learned relationship is wrong even if inputs look identical. Input monitors catch the first; only label-based performance monitoring catches the second.
+    listen_for: [P(x) vs P(y|x), Different detection methods, Covariate drift may be harmless]
+  - level: senior
+    q: You own a churn model whose labels arrive 60 days late. How do you monitor and maintain it?
+    answer: Monitor data quality and input and prediction drift daily as early warnings, plus proxy outcomes that arrive sooner (activity drops, cancellations started). Track true performance and calibration by segment as labels arrive. Retrain on a schedule or on drift triggers with champion–challenger evaluation, keep a small holdout to measure lift, and alert the business when proxy metrics deteriorate before labels confirm it.
+    listen_for: [Early-warning signals, Proxy labels, Segment-level performance, Controlled retraining, Holdout for measurement]
