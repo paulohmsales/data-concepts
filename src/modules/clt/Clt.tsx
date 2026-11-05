@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl, Choice, Toggle } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -12,7 +11,7 @@ import type { VizTheme } from '../../components/vizTheme.ts'
 import { DISTS, draw, predicted, sampleMeans, type DistName } from '../../core/clt.ts'
 import { mulberry32 } from '../../core/random.ts'
 import { histogram, mean, normalPdf, quantile, sd, skewness } from '../../core/stats.ts'
-import { int, pct } from '../../format.ts'
+import { int } from '../../format.ts'
 import styles from '../common.module.css'
 
 interface Controls {
@@ -140,29 +139,8 @@ export default function Clt() {
 
   return (
     <ModuleLayout
-      title="Central limit theorem"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            Take any population, however lopsided: waiting times, incomes, “did this user buy?”. Draw a
-            sample of <b>n</b> and average it. Do that thousands of times and look at the averages, not
-            the draws. They pile up in a bell shape around the true mean, and the bell gets narrower as
-            n grows.
-          </p>
-          <p>
-            That is the <b>central limit theorem</b>: averages of independent draws are approximately
-            normal, centred on the population mean μ, with spread <b>σ/√n</b> (the standard error). It
-            is why confidence intervals and A/B tests can use the normal curve even though nobody’s
-            purchases are normally distributed.
-          </p>
-          <p>
-            Two catches. “Approximately” depends on how skewed the population is: a rare event needs
-            far more than the folklore “n = 30”. And it needs a finite variance: for very heavy tails
-            (the Cauchy below) averaging never settles down at all.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>The population</h3>
@@ -182,10 +160,6 @@ export default function Clt() {
             <Stat label="Skewness of the means" value={f3(skewness(means))} note={`normal = 0; predicted ${f3(p.skew)}`} />
           </StatRow>
           <PlotFigure build={buildMeans} label="Histogram of sample means with the predicted normal curve" />
-          <p className="try">
-            Start at n = 1 (the means chart is just the population), then drag n up. Watch the
-            bell appear and narrow. Quadruple n and the SD of the means halves.
-          </p>
         </div>
       }
       breakIt={
@@ -227,39 +201,7 @@ export default function Clt() {
               },
             ]}
           />
-          <p className="try">
-            “Rare event (5% yes)” at n = 30 with zoom on. The means are lumpy and lean right. To
-            get the skew of the mean below 0.25 you need n ≈ (4.1 / 0.25)² ≈ {int(Math.ceil((DISTS.rare.skew / 0.25) ** 2))}.
-            That is why conversion-rate tests need large samples beyond power alone. A {pct(0.05, 0)}{' '}
-            rate with n = 30 means you expect 1.5 conversions.
-          </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'State the central limit theorem in one sentence without the word “normal” in the first half.',
-              a: 'If you average n independent draws from a population with finite mean μ and variance σ², the average’s sampling distribution gets closer and closer to a normal centred on μ with standard deviation σ/√n as n grows, whatever the population’s shape.',
-            },
-            {
-              q: 'Why does the standard error shrink with √n and not with n?',
-              a: 'Variances of independent draws add: the sum of n draws has variance nσ², so the mean (sum ÷ n) has variance σ²/n and SD σ/√n. Errors partly cancel rather than all lining up, which is why 4× the data only halves the uncertainty.',
-            },
-            {
-              q: 'Your data are hugely skewed (revenue per user). Is the CLT still useful? What should you watch out for?',
-              a: 'Yes for the mean, eventually: the sample mean still tends to normal, but skew fades only as skew/√n, so you may need thousands of users, and a few whales dominate. Check by simulation or bootstrap, consider trimming/winsorising or a log transform (which changes the question), and report medians alongside.',
-            },
-            {
-              q: 'Why does averaging Cauchy draws never converge?',
-              a: 'The Cauchy has tails so heavy that its mean and variance don’t exist; the average of n Cauchy draws is itself exactly Cauchy with the same spread. The CLT’s finite-variance assumption fails, so no amount of data narrows the average. Medians still work.',
-            },
-            {
-              q: 'Does the CLT say that a large sample of data looks normal?',
-              a: 'No. The raw data keep the population’s shape however many you draw (the top chart never changes). The CLT is about the distribution of a statistic (the mean) across repeated samples.',
-            },
-          ]}
-        />
       }
     />
   )

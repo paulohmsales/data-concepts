@@ -13,5 +13,10 @@ export interface VisualProps {
 export const visuals: Record<string, ComponentType<VisualProps>> = {
   'ab.twoBells': lazy(() => import('./ab/TwoBells.tsx')),
   'ab.peekWalk': lazy(() => import('./ab/PeekWalk.tsx')),
+  'stats.ciDance': lazy(() => import('./stats/CiDance.tsx')),
+  'stats.resample': lazy(() => import('./stats/ResampleAnim.tsx')),
+  'stats.simpsonMosaic': lazy(() => import('./stats/SimpsonMosaic.tsx')),
+  'stats.skillLuck': lazy(() => import('./stats/SkillLuck.tsx')),
+  'stats.diceSum': lazy(() => import('./stats/DiceSum.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }

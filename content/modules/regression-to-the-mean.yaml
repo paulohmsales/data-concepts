@@ -28,3 +28,90 @@ check:
 - q: Does regression to the mean mean everyone becomes average over time?
   a: |-
     No. The overall spread stays the same: on test 2 some new people are lucky and land at the extremes. It is about conditional expectations: given an extreme first score, the second is expected to be less extreme.
+experiments:
+  - title: Watch the top fall back
+    goal: Select the top 10% on test 1 with a test that is half skill, half luck.
+    setup: {reliability: 0.5, side: top, share: 0.1}
+    look: The selected group drops from about +25 to about +13 on test 2. “Kept of their lead” is about 50%, the reliability.
+    why: |
+      Their first score was skill plus lucky noise. On the retest the skill stays and the luck is redrawn, averaging zero, so they keep only the skill part of their lead: r × their first-test advantage.
+  - title: No luck, no regression
+    goal: Make the test perfectly reliable.
+    setup: {reliability: 1}
+    look: Everyone sits on the diagonal; the selected group keeps 100% of its lead.
+    why: |
+      Regression to the mean is entirely caused by the noise component. With r = 1 there’s nothing to redraw.
+  - title: Pure luck
+    goal: A test that measures nothing stable.
+    setup: {reliability: 0}
+    look: The selected group falls all the way back to 100.
+    why: |
+      With r = 0, the first score tells you nothing about the second, so the best prediction for everyone is the mean.
+  - title: The intervention that “works”
+    goal: Coach the bottom 10% with a coaching session that does nothing.
+    setup: {side: bottom, effect: 0}
+    look: The naive before/after shows a big improvement; treated minus control is near zero.
+    why: |
+      People selected for a bad first score improve on their own. Only a control group selected the same way separates the intervention from regression to the mean.
+  - title: A real effect
+    goal: Give the coaching a true effect of 5 points.
+    setup: {side: bottom, effect: 5}
+    look: Treated minus control moves to about 5, while the naive number is far bigger.
+    why: |
+      The naive before/after adds the real effect to regression to the mean. The difference with the control removes the regression part.
+
+deep_dive:
+  - type: heading
+    text: Skill stays, luck is redrawn
+  - type: stepper
+    key: stats.skillLuck
+    caption: 30 people. Each score is a stable skill (blue) plus that day’s luck (orange); the dot is the score.
+    steps:
+      - title: Test 1
+        md: Scores vary because of both skill and luck. You can’t tell them apart from the score.
+        state: {phase: 1}
+      - title: Pick the top five
+        md: Sorted by test 1, the winners are mostly people with high skill *and* good luck. Selecting on the score selects on luck too.
+        state: {phase: 2}
+      - title: Test 2
+        md: The same five take another test. Their skill bars are unchanged, but their luck is a fresh draw, on average zero. Their average falls back toward their skill, and toward the mean.
+        state: {phase: 3}
+  - type: formula
+    text: "E[test 2 | test 1 = x] = μ + r·(x − μ)        r = test–retest correlation = share of variance that is skill"
+  - type: markdown
+    md: |
+      This is just the regression line of test 2 on test 1, and its slope is r < 1. (That is literally where the word “regression” comes from: Galton found that tall parents’ children were tall, but less so.) It works in both directions: the people at the top of test 2 were, on average, less extreme on test 1.
+  - type: worked
+    title: Sales reps
+    md: |
+      Quarterly results have a test–retest correlation of about 0.4. The best rep beat the average by $200k this quarter. Best guess for next quarter is about +$80k. If you give them a bonus and they “slack off”, or put the worst rep on a performance plan and they “improve”, most of what you see is regression to the mean.
+  - type: heading
+    text: How to tell a real effect from regression
+  - type: steps
+    items:
+      - title: Use a control selected the same way
+        md: Randomise *among the selected* (half get the intervention). The difference between halves is the effect.
+      - title: Don’t select on the outcome you then measure
+        md: Select on a separate measurement (an earlier test, a different metric), or measure several times before selecting.
+      - title: Shrink extreme estimates
+        md: Average the extreme observation toward the group mean in proportion to its noise (empirical Bayes). This is how good rankings of small hospitals, new products or rookie players work.
+  - type: callout
+    kind: prod
+    md: |
+      Typical traps in analytics: “the worst-performing pages improved after our fix”, “accounts flagged as at-risk last month recovered after the outreach”, “the stores we visited improved”. Before claiming credit for any intervention aimed at extremes, ask what happened to similar extremes that got nothing.
+  - type: related
+    slugs: [ab-testing, simpsons-paradox, cuped]
+
+interview:
+  - level: mid
+    q: We sent a re-engagement email to the 10% least active users last month. Their activity went up 30% this month. Did the email work?
+    answer: Can’t tell from that. Users selected for unusually low activity tend to bounce back on their own (regression to the mean). We need a holdout of similar users (same selection, no email) and compare the two groups’ changes. The difference is the email’s effect.
+    listen_for: [Names regression to the mean, Holdout selected the same way, Effect = treated change minus control change]
+  - level: mid
+    q: A test–retest correlation is 0.6 and someone scores two standard deviations above the mean. What do you predict for their next score?
+    answer: 0.6 × 2 = 1.2 standard deviations above the mean. They are expected to keep 60% of their advantage.
+    listen_for: [Uses r as the shrinkage factor]
+  - level: senior
+    q: How would you rank 500 stores by return rate when some have 20 sales and some 20,000?
+    answer: Raw rates make the smallest stores look the best and the worst by chance alone. Shrink each store’s rate toward the overall rate in proportion to its uncertainty (a beta-binomial or empirical Bayes estimate), or rank by a lower confidence bound, and show uncertainty alongside the rank.
+    listen_for: [Small samples produce extremes, Shrinkage or empirical Bayes, Show uncertainty]

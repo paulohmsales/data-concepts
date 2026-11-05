@@ -28,3 +28,81 @@ check:
 - q: Why does randomisation make Simpson’s paradox (by confounding) impossible in expectation?
   a: |-
     Random assignment gives both arms the same expected mix of every pre-existing variable, so the weights are equal and the pooled comparison equals the standardised one, up to chance imbalance.
+experiments:
+  - title: The real kidney-stone data
+    goal: Start from the published numbers.
+    setup: {}
+    look: A wins among easy cases and among hard cases, yet B wins pooled. The “Paradox?” tile says reversed.
+    why: |
+      Treatment A was given mostly to hard cases (75% of its patients), B mostly to easy ones (23%). Hard cases fail more under any treatment, so A’s pooled rate is dragged down by its mix, not by the treatment.
+  - title: Equalise the mix
+    goal: Give both treatments the same share of hard cases.
+    setup: {hardShare: {A: 0.5, B: 0.5}}
+    look: The two dots line up vertically on the second chart and A wins pooled too. No paradox.
+    why: |
+      With equal weights, the pooled rate is the same weighted average for both arms, so whichever arm wins inside every group also wins overall. Randomisation does exactly this: in expectation, every pre-existing variable is equally mixed.
+  - title: Make B look terrible
+    goal: Now give B most of the hard cases instead.
+    setup: {hardShare: {A: 0.2, B: 0.8}}
+    look: B’s pooled rate falls well below A’s, more than the within-group gaps.
+    why: |
+      The mix effect can exaggerate a gap as easily as reverse it. Any comparison of groups that chose (or were chosen for) different conditions mixes the treatment with the case mix.
+  - title: No paradox without a group effect
+    goal: Make hard cases as easy as easy cases for both treatments.
+    setup: {rates: {A: {easy: 0.85, hard: 0.85}, B: {easy: 0.8, hard: 0.8}}}
+    look: However you move the mix sliders, A stays ahead pooled.
+    why: |
+      Simpson’s paradox needs two things at once: the third variable must affect the outcome (hard cases fail more) and be unevenly distributed across the arms. Remove either and the pooled comparison is safe.
+
+deep_dive:
+  - type: heading
+    text: The pooled rate is an area
+  - type: visual
+    key: stats.simpsonMosaic
+    props: {hardA: 0.75, hardB: 0.23}
+    caption: Each square is one treatment’s patients. The left column is easy cases, the right is hard cases, and the column widths are the mix. Each column is filled up to its success rate. The pooled rate (dashed) is the filled share of the whole square. Slide the mixes to see the pooled line move while the column heights stay put.
+  - type: formula
+    text: "pooled rate = (1 − h)·rate_easy + h·rate_hard        (h = share of hard cases in that arm)"
+  - type: markdown
+    md: |
+      Each arm averages the same two kinds of patient with **its own weights**. A beats B in both columns, but A’s square is mostly the shorter hard column, B’s mostly the tall easy one. Weighted averages with different weights can be ordered any way you like, which is all the paradox is.
+  - type: heading
+    text: Which number answers the question?
+  - type: markdown
+    md: |
+      The data can’t tell you; the story of how the data came about can. Draw the arrows:
+
+      - **Confounder** (stone size → treatment choice, stone size → outcome): it existed before the treatment and drove both. Compare within strata, or standardise both arms to one common mix. The within-group answer (A) is the causal one.
+      - **Mediator** (treatment → blood pressure → outcome): it is *part of how* the treatment works. Stratifying by it hides that part of the effect. The pooled answer is the causal one.
+      - **Collider** (treatment → admission ← severity): conditioning on it creates a spurious association. Don’t stratify.
+  - type: worked
+    title: Standardisation
+    md: |
+      Apply both arms’ group rates to the same mix: here the combined population, 49% hard. A: 0.51 × 93.1% + 0.49 × 73.0% = 83.3%. B: 0.51 × 86.7% + 0.49 × 68.8% = 77.9%. Same weights, so A wins by 5.4 points, the effect of the treatment on a typical patient mix.
+  - type: heading
+    text: Where it shows up in analytics
+  - type: markdown
+    md: |
+      - **Conversion rose overall but fell in every country:** the traffic mix shifted toward high-converting countries.
+      - **Average order value dropped after a launch:** more new customers (smaller first orders), while every segment spends more.
+      - **Hospital or school rankings:** the best hospitals take the hardest cases, so raw outcomes punish them.
+      - **Salary gaps:** pooled gaps and within-role gaps answer different questions (is pay unequal, or are roles unequally distributed?), and both can matter.
+  - type: callout
+    kind: prod
+    md: When a metric moves, decompose the change into a **mix effect** (the weights changed) and a **rate effect** (the within-segment rates changed) before telling anyone why it moved.
+  - type: related
+    slugs: [ab-testing, regression-to-the-mean, cohorts]
+
+interview:
+  - level: mid
+    q: Overall conversion went up 2 points this quarter, but it went down in every region. Explain how, and what you’d tell leadership.
+    answer: The regional mix shifted toward regions that convert better. Pooled conversion is a weighted average of regional rates, and the weights changed. I’d split the change into a mix effect and a rate effect, show that within-region performance actually declined, and dig into why each region fell, plus what drove the traffic shift (it may be good news on its own).
+    listen_for: [Weighted average with changing weights, Mix vs rate decomposition, Doesn’t stop at “it’s a paradox”]
+  - level: senior
+    q: When should you not control for a variable?
+    answer: When it is caused by the treatment (a mediator, since controlling removes part of the effect) or by both treatment and outcome (a collider, since controlling creates bias). Control for pre-treatment common causes (confounders). The decision comes from the causal structure, not from the data alone.
+    listen_for: [Confounder vs mediator vs collider, Pre-treatment variables, Causal reasoning over statistics]
+  - level: senior
+    q: Our two best sales regions have the lowest close rate. Should we change their process?
+    answer: Check the mix first. Big regions may get the hardest leads (enterprise, new markets). Compare close rates within lead segments (size, source, industry) or standardise to a common mix. If they still lag within segments, look at process; if not, the raw comparison was unfair.
+    listen_for: [Asks about segment mix, Within-segment comparison, Standardisation]

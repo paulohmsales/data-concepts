@@ -2,13 +2,13 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useMemo, useState } from 'react'
 import { Choice, ResetButton } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
 import { Stat, StatRow } from '../../components/Stat.tsx'
 import Status from '../../components/Status.tsx'
 import type { VizTheme } from '../../components/vizTheme.ts'
+import { deepMerge } from '../../lib/merge.ts'
 import { KIDNEY_STONES, rate, reverses, summarize, tableFrom, type Arm, type Stratum } from '../../core/simpson.ts'
 import { int, pct } from '../../format.ts'
 import styles from '../common.module.css'
@@ -108,27 +108,8 @@ export default function Simpsons() {
 
   return (
     <ModuleLayout
-      title="Simpson’s paradox"
+      onPreset={(p) => setC(deepMerge(DEFAULTS, p) as Controls)}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A hospital compares two kidney-stone treatments. Treatment A succeeds more often for small
-            stones <em>and</em> for large stones. Yet across all patients, B has the higher success
-            rate. Nobody made an arithmetic mistake.
-          </p>
-          <p>
-            The catch is <b>who got which treatment</b>. Doctors gave A, the stronger option, mostly to
-            hard cases, and hard cases fail more often whatever you do. So A’s pooled rate is dragged
-            down by its tough patient mix, not by the treatment. A pooled rate is a weighted average of
-            the group rates, and the weights here differ between the arms.
-          </p>
-          <p>
-            Which answer is right depends on <em>why</em> the groups differ, not on the numbers. That
-            is a question about cause, and Section 3 makes you answer it.
-          </p>
-        </>
-      }
       play={
         <>
           <StatRow>
@@ -145,11 +126,6 @@ export default function Simpsons() {
             to the right.
           </p>
           <PlotFigure build={buildMix} label="Pooled rate as a weighted average of group rates" />
-          <p className="try">
-            Drag both “hard cases among” sliders to the same value. The dots line up vertically and
-            the paradox disappears. Then give B most of the hard cases instead and watch B look
-            terrible.
-          </p>
         </>
       }
       breakIt={
@@ -210,28 +186,6 @@ export default function Simpsons() {
             ]}
           />
         </>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'How can A beat B in every subgroup and still lose overall?',
-              a: 'The overall rate is a weighted average of subgroup rates, and each arm has its own weights. If A is used mostly on the hard subgroup (which has low rates for everyone), its average is pulled toward the hard-case rate even though it beats B inside each subgroup.',
-            },
-            {
-              q: 'A dashboard shows conversion rose overall, but fell in every country. What happened, and is it good news?',
-              a: 'The traffic mix shifted toward countries that convert well (or away from ones that convert badly). Conversion within each country, which is what product changes act on, fell. Probably bad news, plus a mix shift worth explaining.',
-            },
-            {
-              q: 'When should you not stratify by a third variable?',
-              a: 'When it is caused by the treatment (a mediator) or by both treatment and outcome (a collider). Adjusting for it removes or distorts the effect you are trying to measure. Adjust for confounders (common causes that exist before treatment), not for consequences.',
-            },
-            {
-              q: 'Why does randomisation make Simpson’s paradox (by confounding) impossible in expectation?',
-              a: 'Random assignment gives both arms the same expected mix of every pre-existing variable, so the weights are equal and the pooled comparison equals the standardised one, up to chance imbalance.',
-            },
-          ]}
-        />
       }
     />
   )

@@ -26,3 +26,95 @@ check:
 - q: You A/B test revenue per user and want a CI for the ratio of means B/A. How would you bootstrap it?
   a: |-
     Resample users with replacement within A and within B separately (keeping each arm’s size), compute mean(B)/mean(A) for each pair of resamples, repeat thousands of times, and take the 2.5th and 97.5th percentiles. If users have many rows, resample users, not rows.
+experiments:
+  - title: Bootstrap something without a formula
+    goal: An interval for the 90th percentile of incomes.
+    setup: {stat: p90, n: 100}
+    look: A sensible interval around the truth, from the data alone, where a textbook formula would be messy.
+    why: |
+      The bootstrap needs only a way to compute the statistic. Resample, recompute, and the spread of the recomputed values approximates the statistic’s sampling distribution. That generality is the whole point.
+  - title: Compare with the formula
+    goal: The bootstrap interval for a mean, next to the t interval.
+    setup: {stat: mean, n: 30}
+    look: The two intervals nearly agree; the bootstrap’s is a little asymmetric (longer to the right) because incomes are skewed.
+    why: |
+      For a mean the bootstrap SE converges to s/√n (times √((n−1)/n)). The percentile interval also picks up skewness that the symmetric t interval ignores.
+  - title: A spiky median
+    goal: The median of only 5 values.
+    setup: {stat: median, n: 5}
+    look: The bootstrap histogram is a few spikes, because a median of 5 resampled values can only be one of the 5 originals.
+    why: |
+      The bootstrap world contains only the values you observed. With tiny samples, that world is coarse, so the bootstrap distribution is lumpy and its intervals unreliable.
+  - title: Break it with the maximum
+    goal: Estimate the maximum of scores between 0 and 100.
+    setup: {stat: max, n: 30}
+    look: The whole bootstrap distribution sits below the true maximum of 100; the interval misses it. Run the coverage check below for 0%.
+    why: |
+      No resample can exceed the sample’s own maximum, which is below the true one. The bootstrap fails for statistics driven by extremes and by values outside what you saw.
+  - title: Tiny samples under-cover
+    goal: Mean of skewed incomes from n = 5.
+    setup: {stat: mean, n: 5}
+    look: Run the coverage check below. At n = 5, coverage sits well under the promised 90%.
+    why: |
+      Five draws rarely include the long right tail, so resamples of them understate the variability. The bootstrap assumes the sample represents the population, and tiny samples don’t.
+
+deep_dive:
+  - type: heading
+    text: Resampling, one ball at a time
+  - type: visual
+    key: stats.resample
+    caption: "One skewed sample of 12 order values. Each resample picks 12 balls with replacement (some twice, some not at all) and records its mean. Let it run: the histogram of resample means is the bootstrap distribution, and its SD is the bootstrap standard error."
+  - type: markdown
+    md: |
+      The logic is a substitution. We want the sampling distribution of a statistic: what we’d see across many fresh samples from the population. We can’t draw fresh samples, so we treat the sample as if it *were* the population and draw from it. If the sample looks like the population, samples-from-the-sample behave like samples-from-the-population.
+  - type: steps
+    items:
+      - title: Resample
+        md: Draw n values from your n observations, with replacement.
+      - title: Recompute
+        md: Compute the statistic (median, ratio, p90, model coefficient) on the resample.
+      - title: Repeat
+        md: B times, typically 1,000–10,000. More B reduces Monte Carlo noise, not sampling error.
+      - title: Read the spread
+        md: "The SD of the B values is the standard error. The 2.5th and 97.5th percentiles give a 95% percentile interval."
+  - type: worked
+    title: Why about a third is left out
+    md: |
+      Each of the n draws misses a given observation with probability (1 − 1/n), so the chance it’s never picked is (1 − 1/n)ⁿ → 1/e ≈ 36.8%. Every resample therefore uses about 63% of the distinct observations, some repeated. That’s also why bagging (bootstrap aggregation) gives “out-of-bag” rows for free validation.
+  - type: heading
+    text: Better intervals than the percentile method
+  - type: markdown
+    md: |
+      - **Percentile:** the middle 95% of replicates. Simple, and it respects skewness, but it can be off when the statistic is biased.
+      - **BCa (bias-corrected and accelerated):** adjusts the percentiles for bias and skewness; the default in many libraries and the better choice for skewed statistics.
+      - **Bootstrap-t:** studentise each replicate; accurate but needs an SE per replicate.
+  - type: heading
+    text: Resample the right unit
+  - type: callout
+    kind: warn
+    md: |
+      The bootstrap assumes the rows you resample are independent. Events from the same user, days in a time series or students in the same class are not. Resample **users** (all their events together), **blocks** of consecutive days (block bootstrap), or **clusters**. Resampling rows makes the intervals far too narrow.
+  - type: callout
+    kind: prod
+    md: |
+      In experimentation, bootstrapping is the honest way to get intervals for ratio metrics (revenue per session, CTR), percentiles (p95 latency) and medians. Resample users within each arm separately, keep arm sizes fixed, and compute the difference per replicate.
+  - type: related
+    slugs: [confidence-intervals, clt, ab-testing]
+
+interview:
+  - level: junior
+    q: Explain the bootstrap to a non-technical stakeholder.
+    answer: We can’t rerun the study, so we pretend our sample is the whole population and draw many pretend new studies from it, with replacement. How much the answer changes from one pretend study to the next shows how uncertain our real answer is.
+    listen_for: [Sample stands in for population, With replacement, Spread equals uncertainty]
+  - level: mid
+    q: How would you put a confidence interval on the median session length, and on p95 latency?
+    answer: Bootstrap. Resample users (not sessions, if users have many) with replacement, compute the median (or p95) per resample, repeat a few thousand times, and take percentiles (or BCa). For p95, make sure you have enough data in the tail; with few observations above the 95th percentile the interval is unstable.
+    listen_for: [Bootstrap for quantiles, Resample at the independent unit, Tail data sufficiency]
+  - level: senior
+    q: When does the bootstrap fail?
+    answer: For statistics driven by extremes (the max, extreme quantiles), because resamples can’t go beyond the observed values; with very small samples that don’t represent the population; with dependent data unless you resample blocks or clusters; and with heavy-tailed data where the mean barely exists. It can also be misleading for statistics that aren’t smooth functions of the data.
+    listen_for: [Extremes, Small n, Dependence and block/cluster bootstrap, Heavy tails]
+  - level: senior
+    q: You A/B test revenue per user, which is very skewed. How do you get an interval for the relative lift?
+    answer: Bootstrap within each arm. Resample users with replacement in A and in B separately (keeping their sizes), compute mean(B)/mean(A) − 1 per replicate, and repeat about 10,000 times. Take the percentile or BCa interval. Check stability by rerunning with a different seed, and consider winsorising extreme users if a handful dominate (and say so).
+    listen_for: [Resample within arms, Ratio per replicate, Many replicates and stability, Handling whales transparently]

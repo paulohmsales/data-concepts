@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Choice, ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -117,28 +116,8 @@ export default function Bootstrap() {
 
   return (
     <ModuleLayout
-      title="The bootstrap"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            You have one sample and a statistic, say the median income of 30 people. How uncertain is
-            it? For a mean there is a formula (s/√n). For a median, a 90th percentile or a ratio, the
-            formula is ugly or doesn’t exist.
-          </p>
-          <p>
-            The <b>bootstrap</b> fakes the “repeat the study” experiment using only the data you have.
-            Treat your sample as a stand-in for the population, draw a new sample of the same size from
-            it <em>with replacement</em> (some people twice, about a third not at all), and recompute the
-            statistic. Do it thousands of times. The spread of those recomputed values estimates the
-            statistic’s standard error, and their middle 90% is a 90% interval.
-          </p>
-          <p>
-            It works when the sample resembles the population well enough. It quietly fails when the
-            sample is tiny, or when the statistic depends on extremes the sample can’t contain.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>The one sample you have</h3>
@@ -159,9 +138,6 @@ export default function Bootstrap() {
             {tInterval && <Stat label="Formula (t) interval" value={`${f1(tInterval.lo)} – ${f1(tInterval.hi)}`} note="for comparison" />}
           </StatRow>
           <PlotFigure build={buildReps} label="Histogram of bootstrap replicates with the percentile interval" />
-          <p className="try">
-            Pick the mean and compare the bootstrap interval with the formula interval: they nearly agree. Now pick the 90th percentile, where there is no simple formula and the bootstrap still gives an answer. Small n with the median makes a spiky histogram: a median of 5 values can only be one of those values.
-          </p>
         </div>
       }
       breakIt={
@@ -208,28 +184,6 @@ export default function Bootstrap() {
             </li>
           </ul>
         </>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Explain the bootstrap to a PM in two sentences.',
-              a: 'We can’t rerun the study, so we pretend our sample is the population and draw many fake “new studies” from it with replacement. How much the answer wobbles across those fake studies tells us how much it would wobble across real ones.',
-            },
-            {
-              q: 'Why resample with replacement, and why the same size n?',
-              a: 'Without replacement, every resample of size n is just the original sample shuffled: same statistic every time, no variability. With replacement, each draw is independent from the empirical distribution, mimicking fresh draws from the population. Same n, because the uncertainty depends on n.',
-            },
-            {
-              q: 'When does the bootstrap fail? Give two cases.',
-              a: 'Statistics driven by extremes (the max, extreme quantiles), since resamples can’t go beyond the sample; and tiny samples, which don’t represent the population. It also breaks with dependent data (time series, clustered users) unless you resample blocks or clusters instead of rows.',
-            },
-            {
-              q: 'You A/B test revenue per user and want a CI for the ratio of means B/A. How would you bootstrap it?',
-              a: 'Resample users with replacement within A and within B separately (keeping each arm’s size), compute mean(B)/mean(A) for each pair of resamples, repeat thousands of times, and take the 2.5th and 97.5th percentiles. If users have many rows, resample users, not rows.',
-            },
-          ]}
-        />
       }
     />
   )

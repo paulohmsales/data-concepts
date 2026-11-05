@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Choice, ResetButton, SeedControl } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -112,27 +111,8 @@ export default function ConfidenceIntervals() {
 
   return (
     <ModuleLayout
-      title="Confidence intervals"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            You measure 20 customers and get an average. The true average of all customers is fixed
-            but unknown. A <b>95% confidence interval</b> is a range built by a recipe (mean ± about
-            two standard errors) that, <em>if you repeated the whole study many times</em>, would
-            catch the true value in 95% of the repeats.
-          </p>
-          <p>
-            The 95% describes the recipe, not any one interval. Once you have computed [42, 58], the true
-            mean is either in it or not; you just don’t know which. So “there is a 95% chance the
-            true mean is in [42, 58]” is the classic misreading. It is close enough for everyday talk,
-            but it is wrong in exactly the cases that matter, like peeking or picking the best of many intervals.
-          </p>
-          <p>
-            Below, the study is repeated 100 times. About 5 intervals miss (red). Which ones miss is pure luck.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>100 studies, 100 intervals</h3>
@@ -146,11 +126,6 @@ export default function ConfidenceIntervals() {
             <Stat label="Average width" value={avgWidth.toFixed(1)} note="shrinks like 1/√n" />
           </StatRow>
           <PlotFigure build={buildIntervals} label="One hundred confidence intervals, misses in red" />
-          <p className="try">
-            Raise the level to 99%. Fewer misses, but every interval gets wider. Then multiply n by
-            4 and watch the width halve. Confidence and precision trade against each other; only more
-            data buys both.
-          </p>
         </div>
       }
       breakIt={
@@ -174,32 +149,6 @@ export default function ConfidenceIntervals() {
             </li>
           </ul>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Your interval for average order value is [42, 58] at 95%. What exactly can you say?',
-              a: 'That it came from a procedure that captures the true mean in 95% of repeated studies. For this one interval, the truth is either inside or not. Practically: values in [42, 58] are consistent with the data; values outside would be surprising at the 5% level.',
-            },
-            {
-              q: 'Why is a 99% interval wider than a 95% interval from the same data?',
-              a: 'To miss less often, the recipe has to reach further: the critical value grows from 1.96 to 2.58. Same data, same standard error, more confidence → wider net.',
-            },
-            {
-              q: 'Why use t instead of z, and when does it stop mattering?',
-              a: 'The standard error uses the sample SD, which is itself uncertain; the t distribution with n − 1 df accounts for that extra noise with fatter tails. By n ≈ 30 the t critical value (2.045) is close to 1.96, and by n = 100 the difference is negligible.',
-            },
-            {
-              q: 'How much more data do you need to halve an interval’s width?',
-              a: 'Four times as much. The width is proportional to s/√n, so halving it needs √n to double.',
-            },
-            {
-              q: 'Two products’ 95% intervals overlap. Does that mean there is no significant difference?',
-              a: 'No. Overlap is too strict a test: two intervals can overlap a little while the interval for the difference still excludes 0 (the SE of a difference is √(se₁² + se₂²), less than se₁ + se₂). Build the interval for the difference directly.',
-            },
-          ]}
-        />
       }
     />
   )

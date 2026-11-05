@@ -37,3 +37,14 @@ describe('special functions and distributions (reference values from scipy)', ()
     expect(chiSquareSf(1, 2)).toBeCloseTo(Math.exp(-0.5), 12)
   })
 })
+
+import { deepMerge } from '../../src/lib/merge.ts'
+
+describe('deepMerge (lab presets)', () => {
+  it('merges nested objects without touching the base', () => {
+    const base = { a: 1, b: { x: 1, y: 2 } }
+    expect(deepMerge(base, { b: { y: 3 } })).toEqual({ a: 1, b: { x: 1, y: 3 } })
+    expect(base.b.y).toBe(2)
+    expect(deepMerge(base, {})).toEqual(base)
+  })
+})

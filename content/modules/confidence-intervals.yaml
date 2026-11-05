@@ -28,3 +28,107 @@ check:
 - q: Two products’ 95% intervals overlap. Does that mean there is no significant difference?
   a: |-
     No. Overlap is too strict a test: two intervals can overlap a little while the interval for the difference still excludes 0 (the SE of a difference is √(se₁² + se₂²), less than se₁ + se₂). Build the interval for the difference directly.
+experiments:
+  - title: Count the misses
+    goal: One hundred studies of a normal population at 95%.
+    setup: {population: normal, n: 20, level: 0.95, method: t}
+    look: Roughly 5 red intervals. Change the seed a few times; the count wobbles around 5 and which ones miss is random.
+    why: |
+      Each study’s interval misses with probability 5%, independently, so the count of misses is Binomial(100, 0.05): usually 2 to 9. The promise is about the long run (the 10,000-study coverage), not any one batch.
+  - title: Buy confidence with width
+    goal: Raise the level to 99%, then drop it to 80%.
+    setup: {level: 0.99}
+    look: At 99% almost nothing misses but every interval is about a third wider; at 80% they are narrow and about 20 miss.
+    why: |
+      The interval is mean ± critical × SE. Only the critical value changes: 2.58 at 99%, 1.96 at 95%, 1.28 at 80%. More confidence means a wider net from the same data.
+  - title: Halve the width
+    goal: Compare n = 20 with n = 80.
+    setup: {n: 80}
+    look: The average width halves (from about 9.4 to about 4.4).
+    why: |
+      Width is proportional to s/√n, so four times the data halves it. Precision is expensive: halving again needs n = 320.
+  - title: Use 1.96 on a tiny sample
+    goal: n = 5 with the z critical value instead of t.
+    setup: {n: 5, method: z}
+    look: Long-run coverage around 88%, and visibly more red lines.
+    why: |
+      With 5 points, the sample SD is itself a noisy estimate, often too small. The t distribution with 4 degrees of freedom has fatter tails (critical value 2.78 instead of 1.96) to pay for that. Using 1.96 pretends you know σ.
+  - title: Skewed data, small n
+    goal: The exponential population at n = 5 with the correct t interval.
+    setup: {population: exponential, n: 5, method: t}
+    look: Coverage still falls short (about 87–89%), and the misses are mostly intervals entirely below the truth.
+    why: |
+      With skewed data, the sample mean and the sample SD are correlated: samples that miss the long right tail have both a low mean and a low SD, so their intervals are too short and too low. The t interval assumes normality; the CLT only rescues it at larger n.
+
+deep_dive:
+  - type: heading
+    text: What the 95% belongs to
+  - type: visual
+    key: stats.ciDance
+    props: {level: 0.95, n: 10}
+    caption: Studies arrive one by one, each with its own interval. Blue caught the true mean, red missed. Let it run and watch the running coverage settle near the promised level. No single interval knows whether it is one of the misses.
+  - type: markdown
+    md: |
+      A confidence interval is a **procedure** with a guarantee: run it on many independent studies and it captures the true value in (about) 95% of them. Once you have one interval, say [42, 58], the truth is either inside it or not; the 95% does not move onto that interval as a probability. In daily speech “we’re 95% confident it’s between 42 and 58” is fine. The trap is reasoning that assumes the probability lives in this interval: picking the most favourable of many intervals, or re-running until the interval looks right.
+  - type: heading
+    text: Building one, step by step
+  - type: steps
+    items:
+      - title: Point estimate
+        md: The sample mean x̄.
+      - title: Standard error
+        md: "s/√n: how much x̄ would vary across repeated samples (from the CLT)."
+      - title: Critical value
+        md: "How many standard errors to go out: t₀.₉₇₅,ₙ₋₁ for a mean with estimated SD (2.09 at n = 20, 1.98 at n = 100), z = 1.96 for large samples or proportions."
+      - title: Interval
+        md: "x̄ ± critical × SE."
+  - type: worked
+    title: 20 customers, average spend
+    md: |
+      x̄ = 50, s = 10, n = 20. SE = 10/√20 = 2.24. t₀.₉₇₅,₁₉ = 2.09, so the 95% interval is 50 ± 4.68 = [45.3, 54.7]. With z instead you’d get ±4.38, about 7% too narrow, which is small at n = 20 and large at n = 5.
+  - type: heading
+    text: Intervals and tests are the same thing
+  - type: markdown
+    md: |
+      A 95% interval contains exactly the values that a two-sided test at α = 0.05 would *not* reject. So “the interval for the difference excludes 0” and “p < 0.05” are the same statement, but the interval also shows the size and the uncertainty. Prefer reporting the interval.
+  - type: callout
+    kind: warn
+    title: Overlap is not a test
+    md: Two 95% intervals can overlap while the difference is still significant, because the SE of a difference is √(se₁² + se₂²), which is smaller than se₁ + se₂. When two intervals of similar width overlap by less than about half an arm, the difference is usually significant at 5%. Compute the interval for the difference directly.
+  - type: heading
+    text: Intervals for other things
+  - type: table
+    columns:
+      - {key: what, label: Quantity}
+      - {key: how, label: Usual interval}
+      - {key: careful, label: Careful when}
+    rows:
+      - {what: Mean, how: "x̄ ± t·s/√n", careful: "Small n with skewed data"}
+      - {what: Proportion, how: "Wilson interval (better than p̂ ± 1.96·√(p̂(1−p̂)/n))", careful: "p near 0 or 1, or small n: the plain version can go below 0"}
+      - {what: Difference of means or proportions, how: "d ± z·√(se₁² + se₂²)", careful: "Unequal variances (use Welch)"}
+      - {what: "Median, percentiles, ratios", how: "Bootstrap", careful: "Tiny samples, extremes"}
+      - {what: Regression coefficient, how: "β̂ ± t·SE(β̂)", careful: "Correlated errors (clustered data, time series)"}
+  - type: callout
+    kind: prod
+    md: |
+      Dashboards rarely show intervals, so week-to-week wiggles get read as trends. Adding even a rough interval (or a band of normal variation) to KPI charts prevents a lot of false alarms.
+  - type: related
+    slugs: [clt, bootstrap, ab-testing]
+
+interview:
+  - level: junior
+    q: What does a 95% confidence interval mean?
+    answer: If we repeated the study many times and built an interval each time with the same method, about 95% of those intervals would contain the true value. For our one interval, the values inside are the ones consistent with the data at the 5% level.
+    listen_for: [Repeated-sampling interpretation, Not a 95% probability for this interval, Connects to plausible values]
+  - level: mid
+    q: How do you get a confidence interval for a conversion rate of 3 out of 40?
+    answer: The textbook p̂ ± 1.96·√(p̂(1−p̂)/n) behaves badly at small n and extreme p (here it gives roughly [−0.6%, 15.6%], going below zero). Use a Wilson or exact Clopper–Pearson interval, about [2.6%, 19.9%] (Wilson). Also say plainly that 40 users can’t pin down a rate well.
+    listen_for: [Knows the Wald interval fails here, Names Wilson or exact intervals, Communicates the uncertainty]
+  - level: mid
+    q: Two variants’ 95% intervals overlap. Your colleague says the difference isn’t significant. Agree?
+    answer: Not necessarily. The SE of the difference is √(se₁² + se₂²), less than se₁ + se₂, so intervals can overlap and the difference still be significant. Compute the interval (or test) for the difference itself.
+    listen_for: [SE of a difference, Overlap is too conservative, Test the difference directly]
+  - level: senior
+    q: A stakeholder wants error bars on a weekly metric dashboard. What interval do you show and what are the pitfalls?
+    answer: Depends on the metric. Proportions use Wilson intervals; ratio metrics need the delta method or a bootstrap at the user level. Pitfalls are correlation (users appear in many weeks), seasonality (a weekly wiggle isn’t noise), multiple comparisons across many metrics and segments (some intervals will exclude last week’s value by chance), and interpretation. Often a control-chart style band of normal week-to-week variation is more useful than a sampling interval.
+    listen_for: [Right interval for the metric type, Unit of analysis, Seasonality vs noise, Multiplicity across many charts]

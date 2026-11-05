@@ -30,3 +30,118 @@ check:
 - q: Does the CLT say that a large sample of data looks normal?
   a: |-
     No. The raw data keep the population’s shape however many you draw (the top chart never changes). The CLT is about the distribution of a statistic (the mean) across repeated samples.
+experiments:
+  - title: Watch the bell appear
+    goal: Start with single draws from a skewed population, then average more and more of them.
+    setup: {dist: exponential, n: 1, zoom: false}
+    look: At n = 1 the means chart is just the population (a ski slope). Drag n to 5, 30, 100 and watch it turn into a narrowing bell.
+    why: |
+      Each average mixes highs and lows, so extremes cancel. The more draws in each average, the more they cancel and the more the result looks normal, whatever the population looked like. That is the theorem in motion.
+  - title: Four times the data, half the spread
+    goal: Compare the SD of the means at n = 25 and n = 100.
+    setup: {dist: uniform, n: 25, zoom: true}
+    look: Note “SD of the means”, then set n to 100. It halves.
+    why: |
+      Var(mean) = σ²/n, so SD(mean) = σ/√n. Quadrupling n divides the standard error by √4 = 2.
+  - title: Break it with heavy tails
+    goal: Average Cauchy draws, which have no mean and no variance.
+    setup: {dist: cauchy, n: 100}
+    look: "The spread chart in this section: the line stays flat. Averaging 256 draws is no more precise than one."
+    why: |
+      The CLT needs a finite variance. A Cauchy average is itself exactly Cauchy with the same spread, because one enormous draw can dominate any sum. Medians still work.
+  - title: Rare events need far more than 30
+    goal: A 5% event, samples of 30.
+    setup: {dist: rare, n: 30, zoom: true}
+    look: The means come in lumps (0, 1/30, 2/30…) and lean right; the skewness readout is about 0.75.
+    why: |
+      The skewness of a mean shrinks like skew/√n. A 5% Bernoulli has skew 4.1, so you need n ≈ (4.1/0.25)² ≈ 270 before the normal approximation is decent. Conversion-rate tests rely on large samples for this reason too.
+  - title: Two humps make three
+    goal: Average just two draws from a two-humped population.
+    setup: {dist: bimodal, n: 2, zoom: false}
+    look: "Three humps: both draws from the left hump, one from each, or both from the right."
+    why: |
+      With n = 2 the mean of two values from {2, 8} can be 2, 5 or 8, in proportions 1:2:1. Every extra draw adds more possible combinations, and the combinations pile up into one bell.
+
+deep_dive:
+  - type: heading
+    text: Adding things up makes bells
+  - type: stepper
+    key: stats.diceSum
+    caption: The exact probability of each total when you roll k dice (bars) and the normal curve with the same mean and SD (orange). The bars are computed exactly, by convolving the die’s face probabilities k times, not simulated.
+    steps:
+      - title: One die
+        md: Every face equally likely. Flat, nothing like a bell.
+        state: {k: 1, die: fair}
+      - title: Two dice
+        md: "A triangle: there are six ways to make 7 but only one way to make 2 or 12. Middle totals have more combinations behind them."
+        state: {k: 2, die: fair}
+      - title: Three dice
+        md: The triangle’s corners round off. Already close to a bell.
+        state: {k: 3, die: fair}
+      - title: Ten dice
+        md: Indistinguishable from the normal curve by eye. Counting combinations is all the CLT is doing.
+        state: {k: 10, die: fair}
+      - title: A lopsided die
+        md: It shows a 1 seventy percent of the time. One roll is badly skewed (skewness 1.54).
+        state: {k: 1, die: loaded}
+      - title: Ten lopsided dice
+        md: Still visibly lopsided at ten (skewness 0.49). Skew fades only like 1/√k, so skewed populations need many more draws.
+        state: {k: 10, die: loaded}
+      - title: Forty lopsided dice
+        md: "Skewness down to about 0.24: close enough to normal for most purposes."
+        state: {k: 40, die: loaded}
+  - type: heading
+    text: What exactly the theorem says
+  - type: formula
+    text: "(X̄ₙ − μ) / (σ/√n)  →  N(0, 1)   as n → ∞"
+    caption: "For independent draws with mean μ and finite variance σ²: the standardised sample mean becomes standard normal."
+  - type: markdown
+    md: |
+      Three ingredients hide in that line. **Independence** (or weak dependence): each draw adds fresh randomness. **Identical distribution** (relaxable: the Lindeberg condition only asks that no single draw dominates). **Finite variance**: without it there is no σ to scale by.
+
+      It is a statement about the *sampling distribution of the mean*, not about the data. Your data keep whatever shape they have; what becomes normal is the spread of the averages you would get across repeated samples.
+  - type: heading
+    text: Why the spread shrinks like √n
+  - type: markdown
+    md: |
+      Variances of independent quantities add. The sum of n draws has variance n·σ², so its SD is σ·√n. The mean is the sum divided by n, so its SD is σ·√n / n = **σ/√n**. Errors partly cancel rather than accumulate in a line, and that is the root of every “4× the data for half the uncertainty” rule in statistics.
+  - type: worked
+    title: How fast is “approximately”?
+    md: |
+      The Berry–Esseen theorem bounds the worst gap between the true distribution of the standardised mean and the normal by about 0.5·ρ/(σ³√n), where ρ is the third absolute moment. In practice, the skewness of the mean is skew/√n. Exponential data (skew 2): skew 0.37 at n = 30, fine. A 2% conversion (skew ≈ 6.9): skew 1.26 at n = 30, useless, and still 0.22 at n = 1,000.
+  - type: heading
+    text: When it fails, and what to do
+  - type: table
+    columns:
+      - {key: case, label: Situation}
+      - {key: what, label: What goes wrong}
+      - {key: fix, label: What to do}
+    rows:
+      - {case: "Heavy tails (Cauchy, some Pareto)", what: "Infinite variance: the mean never settles", fix: "Medians, trimmed means, log scale, or model the tail"}
+      - {case: "Very skewed, finite variance (revenue)", what: Normal approximation needs huge n, fix: "Bootstrap, transform, winsorise, or larger samples"}
+      - {case: "Dependent data (time series, users with many events)", what: "Effective n is smaller than the row count, so SEs are too small", fix: "Cluster at the independent unit, block bootstrap, HAC errors"}
+      - {case: Extremes instead of averages, what: The max of n draws doesn’t become normal, fix: Extreme-value theory (Gumbel/GEV)}
+  - type: callout
+    kind: prod
+    md: |
+      Almost every interval and p-value you compute in analytics leans on the CLT: A/B tests, confidence intervals, regression standard errors. When a metric is a few big customers plus many zeros, check whether n is large enough before trusting the normal curve. A quick simulation or bootstrap is the honest test.
+  - type: related
+    slugs: [confidence-intervals, bootstrap, ab-testing]
+
+interview:
+  - level: junior
+    q: What is the central limit theorem and why does it matter for analysts?
+    answer: Averages of many independent draws are approximately normally distributed around the true mean with standard deviation σ/√n, whatever the shape of the data. It matters because it justifies normal-based confidence intervals and tests for means and proportions, even when individual values are skewed.
+    listen_for: [About the sampling distribution of the mean, σ/√n, Shape of data doesn’t matter (given enough n), Finite variance]
+  - level: mid
+    q: Your revenue-per-user data is extremely skewed. Can you still use a t-test? How would you check?
+    answer: Possibly, with enough users, because the mean’s distribution becomes normal, but skew fades slowly (skew/√n) and a few whales can dominate. Check by simulating or bootstrapping the mean and looking at its distribution, compare the t interval with a bootstrap interval, and consider winsorising or a log transform (which changes the question to a geometric mean).
+    listen_for: [Skew fades like 1/√n, Simulate or bootstrap to check, Mentions robust alternatives and what they change]
+  - level: mid
+    q: You have 1 million events from 10,000 users. What is your n for a standard error?
+    answer: Closer to 10,000. Events from the same user are correlated, so they don’t carry independent information. Compute per-user metrics, or use cluster-robust standard errors at the user level. Treating 1 million events as independent makes the SE about √(events per user) times too small.
+    listen_for: [Independence assumption, Unit of analysis, Cluster-robust or aggregate to user]
+  - level: senior
+    q: Why doesn’t the CLT apply to the maximum of a sample, and what do you use instead?
+    answer: The CLT is about sums and averages, where errors cancel. The maximum is driven by a single extreme draw, so nothing cancels; its limiting distribution (when it exists) is one of the extreme-value families (Gumbel, Fréchet, Weibull, together the GEV). For capacity planning or p99 latency you model the tail directly, or use empirical quantiles with plenty of data.
+    listen_for: [Sums vs extremes, Extreme value theory, Practical tail metrics such as p99]
