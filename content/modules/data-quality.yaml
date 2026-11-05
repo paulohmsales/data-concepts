@@ -1,0 +1,145 @@
+slug: data-quality
+title: Data quality and contracts
+track: analytics-engineering
+summary: which tests catch which failures, why volume alerts either cry wolf or miss things, and data contracts that stop breakage at the source.
+roles: [ae, de, da, mgr]
+lab: data-quality
+order: 5
+
+intuition: |
+  Bad data rarely announces itself. A partial load, a duplicated batch or a renamed column usually produces a dashboard that looks normal and is wrong. Data quality work is about catching those failures **before** someone makes a decision with them.
+
+  There are two kinds of checks:
+
+  - **Tests** assert rules you know: this key is unique, this column is never null, every order points at a real customer, the data is less than 2 hours old. They are precise and cheap, but only catch what you thought of.
+  - **Monitors** learn what normal looks like (row counts, null rates, distributions) and flag departures. They catch the unknown, but a monitor that ignores weekly patterns either alerts every weekend or misses real problems, and an alert people learn to ignore is worse than none.
+
+  A **data contract** moves the agreement upstream: the team producing the data commits to a schema, meaning and freshness, and changes that break it fail in their CI, not in your dashboard.
+
+experiments:
+  - title: Crying wolf
+    goal: Alert when fewer than 7,000 rows arrive in a day.
+    setup: {detector: static, floor: 7000}
+    look: Three of the four incidents are caught, but there are about 13–15 false alarms, one for nearly every weekend day.
+    why: |
+      Weekends normally load about 6,000 rows. A fixed threshold can't know that, so it fires every Saturday and Sunday. After two weeks the team mutes the channel.
+  - title: Quiet but blind
+    goal: Lower the threshold to 5,000 rows to stop the noise.
+    setup: {detector: static, floor: 5000}
+    look: Zero false alarms, and the weekday partial load (40% of rows missing) goes unnoticed.
+    why: |
+      A partial weekday load (about 6,600 rows) looks like a normal weekend. Any single threshold that is quiet on weekends is blind to a weekday that lost almost half its data.
+  - title: Statistics without context
+    goal: Use a z-score against the last 28 days (alert beyond 3 standard deviations).
+    setup: {detector: zscore, k: 3}
+    look: Only the duplicate load is caught. Lowering k to 1.5 catches the weekend incident and still misses both weekday drops.
+    why: |
+      The 28-day window mixes weekdays and weekends, so its standard deviation is huge (about a fifth of the mean) and a 40% drop is under 2 standard deviations away. A detector that ignores seasonality is mostly measuring the seasonality.
+  - title: Compare like with like
+    goal: Compare each day with the median of the same weekday over the last 4 weeks, alerting beyond ±10%.
+    setup: {detector: seasonal, tolerance: 0.1}
+    look: All four incidents caught, including the subtle 15% drop, with 1–3 false alarms.
+    why: |
+      Same-weekday baselines remove the weekly pattern, and the median ignores a single bad week in the history. What's left is mostly noise (about 3%), so a 10% band is about 3 noise widths.
+  - title: The sensitivity trade-off
+    goal: Tighten the band to ±5%.
+    setup: {detector: seasonal, tolerance: 0.05}
+    look: Still four of four, but about 20 false alarms.
+    why: |
+      Every monitor sits on a curve between missed incidents and alert fatigue. Tune it on history with known incidents, and route alerts by severity (page for the duplicate load, a ticket for a 6% dip).
+
+deep_dive:
+  - type: heading
+    text: What each test catches
+  - type: table
+    columns:
+      - {key: test, label: Test}
+      - {key: catches, label: Catches}
+      - {key: misses, label: Misses}
+    rows:
+      - {test: "unique (primary key)", catches: "Duplicate loads, fan-out joins, broken surrogate keys", misses: "Rows that are missing entirely"}
+      - {test: not_null, catches: "Failed lookups, dropped columns, upstream nulls", misses: "Wrong but present values"}
+      - {test: "relationships (foreign key)", catches: "Facts pointing at missing dimension rows (late-arriving or deleted)", misses: "Facts pointing at the wrong row"}
+      - {test: accepted_values, catches: "New enum values (a new status, a new country code)", misses: "Values that are valid but wrong"}
+      - {test: freshness, catches: "Stalled pipelines, failed schedules", misses: "Fresh but partial data"}
+      - {test: "volume / row count", catches: "Partial and duplicate loads", misses: "Correct volume with wrong contents"}
+      - {test: "business rules", catches: "Negative prices, refunds > payments, totals not reconciling to source", misses: "Anything you didn't write a rule for"}
+      - {test: "distribution / drift", catches: "Unit changes (cents vs dollars), shifted mixes, silent logic changes", misses: "Needs history; noisy on small tables"}
+      - {test: "schema contract", catches: "Renamed, retyped or dropped columns", misses: "Semantics changing under the same name"}
+  - type: heading
+    text: Where checks belong
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: src, label: Source / producer, sub: "app DB, SaaS, events", col: 0, row: 0}
+        - {id: raw, label: Raw / landing, col: 1, row: 0}
+        - {id: stg, label: Staging, sub: "cleaned, typed, one per source", col: 2, row: 0}
+        - {id: core, label: Core models, sub: "facts and dimensions", col: 3, row: 0}
+        - {id: mart, label: Marts and dashboards, col: 3, row: 1}
+        - {id: obs, label: Monitoring, sub: "volume, freshness, drift", col: 1, row: 1}
+      edges:
+        - {from: src, to: raw}
+        - {from: raw, to: stg}
+        - {from: stg, to: core}
+        - {from: core, to: mart}
+        - {from: obs, to: raw}
+        - {from: obs, to: core}
+    steps:
+      - title: At the source, a contract
+        md: The producing team owns a schema (names, types, nullability), semantics (what a row means, units) and an SLA (freshness, completeness). Their CI checks changes against it, so a breaking rename fails before deploy.
+        state: {active: [src]}
+      - title: On landing, freshness and volume
+        md: Did data arrive, on time, in roughly the expected amount? These catch stalled or partial loads before anything is built on top.
+        state: {active: [raw, obs]}
+      - title: In staging, structural tests
+        md: Primary keys unique and not null, accepted values, types cast correctly. Cheap, precise, and they run on every build.
+        state: {active: [stg]}
+      - title: In core models, relationships and business rules
+        md: Every fact has a dimension row, totals reconcile to the source, no negative quantities. Fail the build (or quarantine the rows) on severe failures.
+        state: {active: [core, obs]}
+      - title: Before the dashboard
+        md: Only tested models are exposed. A failed severe test blocks publishing, so people see slightly stale data with a banner rather than fresh wrong data.
+        state: {active: [core, mart]}
+  - type: heading
+    text: A data contract, concretely
+  - type: code
+    lang: yaml
+    code: |
+      # orders.contract.yaml (owned by the checkout team)
+      dataset: checkout.orders
+      owner: checkout-team
+      grain: one row per order
+      schema:
+        order_id:     {type: string, required: true, unique: true}
+        customer_id:  {type: string, required: true}
+        amount_cents: {type: integer, required: true, min: 0}   # cents, not dollars
+        status:       {type: string, enum: [placed, paid, shipped, cancelled]}
+        created_at:   {type: timestamp, required: true}
+      sla:
+        freshness: 1h
+        completeness: ">= 99.9% of orders within 1h"
+      changes: breaking changes need a new version and 30 days' notice
+  - type: callout
+    kind: prod
+    md: "Treat failures by severity. Errors (duplicate keys, a source that stopped) block the pipeline and page the owner. Warnings (a 6% volume dip, a new enum value) open a ticket. Every alert needs an owner and a runbook, and every check that fires repeatedly without action should be fixed or deleted. Alert fatigue is how real incidents get ignored."
+  - type: related
+    slugs: [dimensional-modeling, surrogate-keys, join-fanout, retries-idempotency, late-data]
+
+interview:
+  - level: junior
+    q: Which basic tests would you add to a new dbt model?
+    answer: unique and not_null on the primary key, not_null on required columns, accepted_values on status-like columns, relationships to the dimensions it references, and source freshness. Then business rules specific to the model, such as amounts non-negative or totals reconciling.
+    listen_for: [Primary key tests, Relationships, Accepted values, Freshness]
+  - level: mid
+    q: Your daily row-count alert fires every weekend. How do you fix it without missing real problems?
+    answer: Compare against a seasonal baseline (the same weekday over recent weeks, using a median to resist past incidents) or a model with weekly seasonality, instead of a fixed threshold or a plain z-score. Tune the band on history with known incidents, and split severities so small deviations open tickets while large ones page.
+    listen_for: [Seasonality, Robust baseline, Tune on history, Severity levels]
+  - level: mid
+    q: What is a data contract and what problem does it solve?
+    answer: An agreement, ideally machine-checked, between a data producer and its consumers covering schema, semantics, ownership and SLAs. It solves the classic problem of upstream application changes (a renamed column, a unit change, a new status) silently breaking downstream pipelines, by catching breaking changes in the producer's CI and making ownership explicit.
+    listen_for: [Schema plus semantics plus SLA, Enforced at the producer, Ownership, Versioning breaking changes]
+  - level: senior
+    q: A VP says “I don’t trust the numbers.” How do you approach data quality across the org?
+    answer: Find the specific incidents behind the distrust and their causes. Define critical data products and owners, and give each tiered checks (tests, freshness, volume, reconciliation to source). Add contracts with the main producing teams, and publish visible status so users can see whether a dashboard is healthy. Run incidents with postmortems, and track metrics like incidents caught before users, time to detect and time to resolve. Trust is rebuilt by catching problems first and communicating them.
+    listen_for: [Start from concrete incidents, Ownership and tiers, Contracts upstream, Visible health status, Measured improvement]
