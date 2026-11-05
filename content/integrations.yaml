@@ -1,0 +1,330 @@
+# Setup guides and guided labs for the real-cloud integrations.
+# Credentials never live here: they go onto the server with deploy/set-integration.sh.
+
+- key: bigquery
+  name: BigQuery
+  vendor: Google Cloud
+  summary: Serverless SQL billed by bytes scanned. The labs use Google's public datasets, so you only need permission to run jobs.
+  cost_note: The BigQuery sandbox is free (1 TB of queries a month, no billing account needed). Every lab query also carries maximum_bytes_billed (1 GB by default), so a mistake fails instead of costing money.
+  config_template: |
+    {
+      "service_account": "← the set-integration script inserts your downloaded key file here",
+      "location": "US",
+      "max_bytes_billed": 1000000000,
+      "daily_queries": 200
+    }
+  setup:
+    - title: Create a project (free sandbox is fine)
+      md: In the [Google Cloud console](https://console.cloud.google.com/bigquery), create a project such as `data-concepts-lab`. Without billing it runs in the **BigQuery sandbox**, which is free and plenty for these labs.
+    - title: Create a service account
+      md: "**IAM & Admin → Service accounts → Create**. Name it `dc-lab`. Grant it one role on the project: **BigQuery Job User** (`roles/bigquery.jobUser`). Public datasets are readable by any account, so it needs nothing else."
+    - title: Download a JSON key
+      md: "Open the service account → **Keys → Add key → Create new key → JSON**. If your organisation blocks key creation (policy `iam.disableServiceAccountKeyCreation`), use a personal project."
+    - title: Optional daily cap
+      md: "**IAM & Admin → Quotas**, search “Query usage per day” for the BigQuery API and set it to e.g. 50 GiB. Google then refuses queries beyond that, whatever happens."
+    - title: Put the key on the server
+      md: |
+        From the repo, run (prefix with `!` to run it from Claude Code):
+        ```
+        ./deploy/set-integration.sh bigquery ~/Downloads/your-key.json
+        ```
+        The script wraps the key in the config above, copies it to the server (readable only by root) and checks it. The key never enters the repository or this chat.
+  recipes:
+    - id: bq-limit
+      title: LIMIT doesn't make it cheaper
+      goal: Estimate (dry run, free) a SELECT * with LIMIT 10 on the US baby names table.
+      dry_run: true
+      sql: |
+        SELECT *
+        FROM `bigquery-public-data.usa_names.usa_1910_current`
+        LIMIT 10
+      look: The estimate is the size of the whole table. Now remove the LIMIT and estimate again; it's the same number.
+      why: BigQuery bills the columns it reads, and LIMIT is applied after reading. To scan less, select fewer columns or filter on a partitioned or clustered column.
+    - id: bq-columns
+      title: Columns are what you pay for
+      goal: Estimate the same table reading only two columns.
+      dry_run: true
+      sql: |
+        SELECT name, number
+        FROM `bigquery-public-data.usa_names.usa_1910_current`
+      look: A fraction of the SELECT * estimate. The state and gender columns are no longer read.
+      why: Columnar storage keeps each column separately, so unused columns cost nothing. SELECT * in production queries is the most common BigQuery cost mistake.
+    - id: bq-names
+      title: Top names by decade (a real query)
+      goal: Run a window-function query for real.
+      sql: |
+        SELECT decade, name, total
+        FROM (
+          SELECT DIV(year, 10) * 10 AS decade, name, SUM(number) AS total,
+                 ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY SUM(number) DESC) AS rk
+          FROM `bigquery-public-data.usa_names.usa_1910_current`
+          WHERE gender = 'F'
+          GROUP BY decade, name
+        )
+        WHERE rk <= 3
+        ORDER BY decade, total DESC
+      look: Rows come back with the bytes billed and the cost (fractions of a cent). Run it a second time and check “cache hit” with 0 bytes billed.
+      why: BigQuery caches identical query results for about 24 hours, free. Dashboards that re-run the same query are often mostly free.
+    - id: bq-shards
+      title: Date-sharded tables and _TABLE_SUFFIX
+      goal: Count Google Analytics sessions for one week of a date-sharded dataset.
+      sql: |
+        SELECT _TABLE_SUFFIX AS day, COUNT(*) AS sessions, SUM(totals.pageviews) AS pageviews
+        FROM `bigquery-public-data.google_analytics_sample.ga_sessions_*`
+        WHERE _TABLE_SUFFIX BETWEEN '20170701' AND '20170707'
+        GROUP BY day
+        ORDER BY day
+      look: Seven rows and a small scan. Estimate the same query without the WHERE (dry run) to see what scanning every day would cost.
+      why: Filtering on _TABLE_SUFFIX skips whole tables, the older equivalent of partition pruning. New tables should use date partitioning instead of shards.
+
+- key: snowflake
+  name: Snowflake
+  vendor: Snowflake
+  summary: A warehouse billed by compute time (credits per second while running). The labs use the built-in TPC-H sample data.
+  cost_note: An X-Small warehouse costs 1 credit per hour of running time, about $2–4, and it suspends after 60 seconds idle. A resource monitor suspends it for good once the monthly credit quota is used. A trial account includes $400 of credits.
+  config_template: |
+    {
+      "account": "ORGNAME-ACCOUNTNAME",
+      "user": "LAB_USER",
+      "role": "LAB_ROLE",
+      "warehouse": "LAB_WH",
+      "database": "SNOWFLAKE_SAMPLE_DATA",
+      "schema": "TPCH_SF1",
+      "private_key": "← the set-integration script inserts rsa_key.p8 here",
+      "daily_queries": 200
+    }
+  setup:
+    - title: An account
+      md: Use an existing account or start a [30-day trial](https://signup.snowflake.com/). Your account identifier (`ORGNAME-ACCOUNTNAME`) is in the account menu → **View account details**.
+    - title: Generate a key pair on your machine
+      md: |
+        Snowflake service users authenticate with a key pair, not a password:
+        ```
+        openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+        openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+        ```
+        Keep `rsa_key.p8` private. You'll paste the body of `rsa_key.pub` (without the BEGIN/END lines) in the next step.
+    - title: Create a capped warehouse, a role and a user
+      md: |
+        In a worksheet, as ACCOUNTADMIN:
+        ```
+        use role accountadmin;
+        create warehouse if not exists lab_wh warehouse_size = xsmall
+          auto_suspend = 60 auto_resume = true initially_suspended = true
+          statement_timeout_in_seconds = 120;
+        create resource monitor if not exists lab_monitor with credit_quota = 5
+          frequency = monthly start_timestamp = immediately
+          triggers on 80 percent do notify on 100 percent do suspend_immediate;
+        alter warehouse lab_wh set resource_monitor = lab_monitor;
+
+        create role if not exists lab_role;
+        grant usage on warehouse lab_wh to role lab_role;
+        grant imported privileges on database snowflake_sample_data to role lab_role;
+        create database if not exists lab_db;
+        create schema if not exists lab_db.sandbox;
+        grant usage on database lab_db to role lab_role;
+        grant all on schema lab_db.sandbox to role lab_role;
+
+        create user if not exists lab_user type = service
+          default_role = lab_role default_warehouse = lab_wh
+          rsa_public_key = 'MIIBIjANBgkq...';   -- body of rsa_key.pub
+        grant role lab_role to user lab_user;
+        ```
+        If `snowflake_sample_data` doesn't exist in your account, first run `create database snowflake_sample_data from share sfc_samples.sample_data;`.
+    - title: Put the config on the server
+      md: |
+        Save the config template above as `snowflake.json` with your account identifier, then:
+        ```
+        ./deploy/set-integration.sh snowflake snowflake.json rsa_key.p8
+        ```
+  recipes:
+    - id: sf-count
+      title: Metadata answers instantly
+      goal: Count the 6 million line items.
+      sql: SELECT COUNT(*) FROM snowflake_sample_data.tpch_sf1.lineitem
+      look: Milliseconds, and 0 partitions scanned. Snowflake keeps row counts and min/max per micro-partition, so it answered without reading data or even starting the warehouse.
+      why: Simple aggregates on whole tables (COUNT, MIN, MAX) come from metadata. Add a WHERE on a non-clustered column and it has to scan.
+    - id: sf-prune
+      title: Pruning on a date
+      goal: Total orders for one day in the 150-million-row TPC-H SF100 orders table.
+      sql: |
+        SELECT COUNT(*) AS orders, SUM(o_totalprice) AS revenue
+        FROM snowflake_sample_data.tpch_sf100.orders
+        WHERE o_orderdate = '1995-03-15'
+      look: Compare partitions scanned with partitions total. Then change the filter to `o_custkey = 1234567` and run again.
+      why: Micro-partitions store min/max per column. Data loaded roughly in date order has narrow date ranges per partition, so a date filter skips most of them. Customer keys are spread everywhere, so that filter scans nearly all partitions. Clustering keys exist to fix exactly this.
+    - id: sf-revenue
+      title: A real join
+      goal: Revenue by nation for 1995 (SF1).
+      sql: |
+        SELECT n.n_name AS nation, ROUND(SUM(o.o_totalprice) / 1e6, 1) AS revenue_m
+        FROM snowflake_sample_data.tpch_sf1.orders o
+        JOIN snowflake_sample_data.tpch_sf1.customer c ON c.c_custkey = o.o_custkey
+        JOIN snowflake_sample_data.tpch_sf1.nation n ON n.n_nationkey = c.c_nationkey
+        WHERE YEAR(o.o_orderdate) = 1995
+        GROUP BY nation
+        ORDER BY revenue_m DESC
+      look: The first run includes warehouse resume time. Run it again immediately; it comes from the result cache in a fraction of the time.
+      why: The result cache returns identical queries for 24 hours without using the warehouse (and without credits) when the underlying data hasn't changed.
+
+- key: athena
+  name: Athena (AWS)
+  vendor: Amazon Web Services
+  summary: Serverless SQL over files in S3, billed by bytes scanned. The labs use NOAA's public weather records, stored both as CSV and as partitioned Parquet.
+  cost_note: "$5 per TB scanned (10 MB minimum per query). The workgroup's per-query limit (1 GB) cancels anything bigger, and a budget alert covers the rest."
+  config_template: |
+    {
+      "access_key_id": "AKIA...",
+      "secret_access_key": "...",
+      "region": "us-east-1",
+      "workgroup": "dc-lab",
+      "database": "dc_lab",
+      "daily_queries": 200,
+      "daily_bytes": 20000000000
+    }
+  setup:
+    - title: Use us-east-1
+      md: The NOAA data lives in `s3://noaa-ghcn-pds` in **us-east-1**. Reading from the same region avoids transfer charges.
+    - title: A bucket for query results
+      md: "**S3 → Create bucket**, e.g. `dc-lab-athena-results-<something unique>` in us-east-1. Add a lifecycle rule that deletes objects after 7 days."
+    - title: A workgroup with a scan limit
+      md: "**Athena → Workgroups → Create**: name `dc-lab`, query result location `s3://<your bucket>/results/`, tick **Override client-side settings**. Under **Data usage controls** set a per-query limit of **1 GB**. Then in the query editor, with that workgroup, run `CREATE DATABASE dc_lab`."
+    - title: An IAM user that can do only this
+      md: |
+        **IAM → Users → Create user** `dc-lab` (no console access). Attach an inline policy, replacing ACCOUNT_ID and RESULTS_BUCKET:
+        ```
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {"Effect": "Allow",
+             "Action": ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults",
+                        "athena:StopQueryExecution", "athena:GetWorkGroup"],
+             "Resource": "arn:aws:athena:us-east-1:ACCOUNT_ID:workgroup/dc-lab"},
+            {"Effect": "Allow",
+             "Action": ["glue:GetDatabase", "glue:GetDatabases", "glue:GetTable", "glue:GetTables",
+                        "glue:GetPartition", "glue:GetPartitions", "glue:CreateTable", "glue:UpdateTable", "glue:DeleteTable"],
+             "Resource": ["arn:aws:glue:us-east-1:ACCOUNT_ID:catalog",
+                          "arn:aws:glue:us-east-1:ACCOUNT_ID:database/default",
+                          "arn:aws:glue:us-east-1:ACCOUNT_ID:database/dc_lab",
+                          "arn:aws:glue:us-east-1:ACCOUNT_ID:table/dc_lab/*"]},
+            {"Effect": "Allow", "Action": ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"],
+             "Resource": ["arn:aws:s3:::noaa-ghcn-pds", "arn:aws:s3:::noaa-ghcn-pds/*"]},
+            {"Effect": "Allow",
+             "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation", "s3:AbortMultipartUpload"],
+             "Resource": ["arn:aws:s3:::RESULTS_BUCKET", "arn:aws:s3:::RESULTS_BUCKET/*"]}
+          ]
+        }
+        ```
+        Then **Security credentials → Create access key → Application running outside AWS**.
+    - title: A budget alert
+      md: "**Billing → Budgets → Create budget**, monthly cost budget of $5 with an email alert at 80%."
+    - title: Put the config on the server
+      md: |
+        Fill the template above into `athena.json`, then:
+        ```
+        ./deploy/set-integration.sh athena athena.json
+        ```
+  recipes:
+    - id: ath-ddl-parquet
+      title: 1. Create the Parquet table
+      goal: Define a table over NOAA's daily weather records in Parquet, partitioned by year and element, with partition projection so no partition loading is needed.
+      sql: |
+        CREATE EXTERNAL TABLE IF NOT EXISTS dc_lab.ghcn (
+          id string, date string, data_value bigint,
+          m_flag string, q_flag string, s_flag string, obs_time string)
+        PARTITIONED BY (year int, element string)
+        STORED AS PARQUET
+        LOCATION 's3://noaa-ghcn-pds/parquet/by_year/'
+        TBLPROPERTIES (
+          'projection.enabled' = 'true',
+          'projection.year.type' = 'integer', 'projection.year.range' = '1750,2030',
+          'projection.element.type' = 'enum',
+          'projection.element.values' = 'TMAX,TMIN,TAVG,PRCP,SNOW,SNWD',
+          'storage.location.template' = 's3://noaa-ghcn-pds/parquet/by_year/YEAR=${year}/ELEMENT=${element}/')
+      look: Finishes instantly and scans 0 bytes, because it only writes metadata to the Glue catalog.
+      why: Partition projection computes partition locations from the filter instead of listing them in the catalog, which is ideal for regular layouts like year=/element=.
+    - id: ath-parquet
+      title: 2. A question on Parquet
+      goal: Average maximum temperature at US stations in 2023.
+      sql: |
+        SELECT COUNT(*) AS readings, ROUND(AVG(data_value) / 10.0, 2) AS avg_tmax_c
+        FROM dc_lab.ghcn
+        WHERE year = 2023 AND element = 'TMAX' AND id LIKE 'US%'
+      look: Bytes scanned is in the megabytes. Only one year and one element's files were opened, and only the two columns used were read.
+      why: Partition pruning (year, element) and columnar reads (id, data_value) multiply. That is the whole economics of a data lake.
+    - id: ath-ddl-csv
+      title: 3. Create the CSV table
+      goal: Define a table over the same data as one CSV file per year.
+      sql: |
+        CREATE EXTERNAL TABLE IF NOT EXISTS dc_lab.ghcn_csv (
+          id string, date string, element string, data_value int,
+          m_flag string, q_flag string, s_flag string, obs_time string)
+        ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+        LOCATION 's3://noaa-ghcn-pds/csv/by_year/'
+        TBLPROPERTIES ('skip.header.line.count' = '1')
+      look: Instant again, since it's just metadata.
+      why: The files aren't in partition folders, so Athena can't skip any of them.
+    - id: ath-csv
+      title: 4. The same question on CSV
+      goal: Same question, filtering 2023 by the date string.
+      sql: |
+        SELECT COUNT(*) AS readings, ROUND(AVG(data_value) / 10.0, 2) AS avg_tmax_c
+        FROM dc_lab.ghcn_csv
+        WHERE date LIKE '2023%' AND element = 'TMAX' AND id LIKE 'US%'
+      look: The query is cancelled at the workgroup's 1 GB per-query limit, because it would have to read every byte of every year, tens of gigabytes of text.
+      why: CSV has no column pruning, no statistics and no partitions here. The guard rail turned a costly mistake into an error message. Converting to partitioned Parquet (with CTAS) is the standard fix.
+
+- key: databricks
+  name: Databricks
+  vendor: Databricks
+  summary: A lakehouse platform; the labs run SQL on a serverless SQL warehouse against the built-in samples catalog (Delta tables).
+  cost_note: Databricks Free Edition is free with usage limits. On a paid workspace a 2X-Small serverless SQL warehouse costs a few DBUs per hour while running; set auto-stop to the minimum.
+  config_template: |
+    {
+      "host": "dbc-xxxxxxxx-xxxx.cloud.databricks.com",
+      "warehouse_id": "abcdef1234567890",
+      "token": "dapi...",
+      "daily_queries": 200
+    }
+  setup:
+    - title: A workspace
+      md: "[Databricks Free Edition](https://www.databricks.com/learn/free-edition) is enough, or use a trial or existing workspace."
+    - title: A small SQL warehouse
+      md: "**SQL Warehouses**: use the serverless starter warehouse or create a 2X-Small one, and set **Auto stop** to the minimum. From **Connection details** copy the **Server hostname** and the warehouse ID (the last part of the HTTP path, `/sql/1.0/warehouses/<id>`)."
+    - title: A token
+      md: "Simplest is a personal access token: **Settings → Developer → Access tokens → Generate**, with a 90-day lifetime. Better, if your workspace supports it, a **service principal** with an OAuth secret (put `client_id` and `client_secret` in the config instead of `token`), granted only **Can use** on the warehouse and `USE CATALOG` / `SELECT` on what the labs read."
+    - title: Put the config on the server
+      md: |
+        Fill the template above into `databricks.json`, then:
+        ```
+        ./deploy/set-integration.sh databricks databricks.json
+        ```
+  recipes:
+    - id: dbx-trips
+      title: NYC taxi trips by hour
+      goal: A first query on the samples catalog.
+      sql: |
+        SELECT HOUR(tpep_pickup_datetime) AS hour, COUNT(*) AS trips,
+               ROUND(AVG(fare_amount), 2) AS avg_fare, ROUND(AVG(trip_distance), 2) AS avg_miles
+        FROM samples.nyctaxi.trips
+        GROUP BY hour
+        ORDER BY hour
+      look: The first run may wait for the warehouse to start. Run again; warm runs take about a second.
+      why: Serverless warehouses start in seconds but still have a cold start. Auto-stop trades that wait against idle cost.
+    - id: dbx-detail
+      title: What a Delta table is made of
+      goal: Inspect the table's files and size.
+      sql: DESCRIBE DETAIL samples.nyctaxi.trips
+      look: format = delta, numFiles, sizeInBytes, and clustering or partition columns.
+      why: A Delta table is Parquet files plus a transaction log (see the Lakehouse module). numFiles ÷ size tells you whether it has a small-files problem.
+    - id: dbx-explain
+      title: Which join did the optimiser pick?
+      goal: Show the physical plan of an orders–customer join.
+      sql: |
+        EXPLAIN FORMATTED
+        SELECT c.c_mktsegment, COUNT(*) AS orders
+        FROM samples.tpch.orders o
+        JOIN samples.tpch.customer c ON o.o_custkey = c.c_custkey
+        GROUP BY c.c_mktsegment
+      look: Search the plan for BroadcastHashJoin or ShuffledHashJoin/SortMergeJoin (with Photon, names start with Photon).
+      why: The customer table is small enough to broadcast, so no shuffle of orders is needed. It's the same decision the Spark joins module simulates.

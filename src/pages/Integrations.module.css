@@ -1,0 +1,229 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.card:hover {
+  border-color: var(--accent);
+}
+
+.pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ok {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+}
+
+.todo {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.usage {
+  font-size: 0.8rem;
+  color: var(--fg-2);
+}
+
+.open {
+  margin-top: auto;
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.error {
+  color: var(--bad);
+}
+
+/* provider page */
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.head h1 {
+  margin: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  align-items: start;
+}
+
+.recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: sticky;
+  top: calc(var(--topbar-h, 56px) + 1rem);
+}
+
+.recipes h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.recipe {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.recipe:hover {
+  border-color: var(--accent);
+}
+
+.recipe.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.console {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.brief {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.brief p {
+  margin: 0.3rem 0;
+}
+
+.editor {
+  width: 100%;
+  min-height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  color: var(--fg);
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actions button.run {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.actions small {
+  color: var(--muted);
+}
+
+.stats {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--fg-2);
+}
+
+.stats strong {
+  color: var(--fg);
+}
+
+.failure {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bad) 8%, var(--surface));
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
+.guide {
+  margin-top: 2rem;
+}
+
+.guide ol {
+  padding-left: 1.2rem;
+}
+
+.guide li {
+  margin-bottom: 1rem;
+}
+
+.guide pre {
+  overflow-x: auto;
+}
+
+.history {
+  margin-top: 2rem;
+}
+
+.sqlCell {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  max-width: 420px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .recipes {
+    position: static;
+  }
+}

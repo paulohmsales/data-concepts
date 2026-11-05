@@ -24,6 +24,7 @@ ssh "$DEPLOY_HOST" bash -s -- "$REMOTE" "$TAG" "$DOMAIN" <<'REMOTE_SCRIPT'
 set -euo pipefail
 REMOTE="$1" TAG="$2" DOMAIN="$3"
 cd "$REMOTE"
+mkdir -p secrets && chmod 700 secrets
 if [ ! -f .env ]; then
   pass="$(openssl rand -base64 18)"
   printf "BASIC_AUTH_USERS='paulo:%s'\n" "$(openssl passwd -apr1 "$pass")" > .env

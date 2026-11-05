@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from . import progress, seed
+from . import integrations, progress, seed
 
 DB_PATH = Path(os.environ.get("CONTENT_DB", seed.DEFAULT_DB))
 
@@ -26,6 +26,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="data-concepts API", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.include_router(progress.router)
+app.include_router(integrations.router)
 
 
 def db() -> sqlite3.Connection:
@@ -90,6 +91,12 @@ def platforms():
             "architectures": rows("SELECT body FROM architectures ORDER BY ord"),
         }
     )
+
+
+@app.get("/api/integrations")
+def integrations_content():
+    """Setup guides and lab recipes for each provider (live status is /api/integrations/status)."""
+    return cached(rows("SELECT body FROM integrations ORDER BY ord"))
 
 
 @app.get("/api/search")

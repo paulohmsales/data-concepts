@@ -254,3 +254,32 @@ class Platforms(Strict):
     dimensions: list[Dimension]
     prices: list[PricePoint]
     architectures: list[Architecture]
+
+
+# ---------------------------------------------------------------- integrations
+
+
+class SetupStep(BaseModel):
+    title: str
+    md: str
+
+
+class Recipe(BaseModel):
+    id: str
+    title: str
+    goal: str
+    sql: str
+    look: str
+    why: str = ""
+    dry_run: bool = False
+
+
+class Integration(BaseModel):
+    key: Literal["bigquery", "snowflake", "athena", "databricks"]
+    name: str
+    vendor: str
+    summary: str
+    cost_note: str
+    config_template: str
+    setup: list[SetupStep]
+    recipes: list[Recipe]

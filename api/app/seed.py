@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 from pydantic import TypeAdapter, ValidationError
 
-from .schema import Market, Module, Platforms, Role, Track
+from .schema import Integration, Market, Module, Platforms, Role, Track
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTENT = Path(os.environ.get("CONTENT_DIR", ROOT / "content"))
@@ -72,8 +72,13 @@ def load_content(content_dir: Path = DEFAULT_CONTENT) -> dict:
         "platforms/",
     )
 
+    integrations = _validate(TypeAdapter(list[Integration]), _load(content_dir / "integrations.yaml"), "integrations.yaml")
+    ids = [r.id for i in integrations for r in i.recipes]
+    if len(ids) != len(set(ids)):
+        raise ContentError("integrations.yaml: duplicate recipe ids")
+
     _check_references(tracks, modules, platforms)
-    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms}
+    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms, "integrations": integrations}
 
 
 def _check_references(tracks, modules, platforms) -> None:
@@ -138,6 +143,7 @@ CREATE TABLE services (id INTEGER PRIMARY KEY, provider TEXT REFERENCES provider
 CREATE TABLE dimensions (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE TABLE prices (id INTEGER PRIMARY KEY, provider TEXT, body TEXT NOT NULL);
 CREATE TABLE architectures (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
+CREATE TABLE integrations (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(kind, ref, title, body, tokenize = 'porter unicode61');
 """
 
@@ -187,6 +193,9 @@ def build(content_dir: Path = DEFAULT_CONTENT, db_path: Path = DEFAULT_DB) -> di
         con.execute("INSERT INTO prices (provider, body) VALUES (?, ?)", (pp.provider, j(pp)))
     for i, a in enumerate(p.architectures):
         con.execute("INSERT INTO architectures VALUES (?, ?, ?)", (a.key, i, j(a)))
+
+    for i, it in enumerate(c["integrations"]):
+        con.execute("INSERT INTO integrations VALUES (?, ?, ?)", (it.key, i, j(it)))
 
     con.commit()
     con.close()

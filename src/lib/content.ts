@@ -146,3 +146,57 @@ export interface SearchHit {
   title: string
   snippet: string
 }
+
+/* ---------- integrations ---------- */
+
+export type IntegrationKey = 'bigquery' | 'snowflake' | 'athena' | 'databricks'
+
+export interface Recipe {
+  id: string
+  title: string
+  goal: string
+  sql: string
+  look: string
+  why: string
+  dry_run: boolean
+}
+
+export interface Integration {
+  key: IntegrationKey
+  name: string
+  vendor: string
+  summary: string
+  cost_note: string
+  config_template: string
+  setup: { title: string; md: string }[]
+  recipes: Recipe[]
+}
+
+export interface IntegrationStatus {
+  configured: boolean
+  problem: string | null
+  limits: { daily_queries: number; daily_bytes: number; timeout_s: number; max_rows: number }
+  today: { queries: number; bytes: number; cost_usd: number }
+}
+
+export interface RunResult {
+  columns: string[]
+  rows: unknown[][]
+  ms: number
+  bytes_scanned: number | null
+  cost_usd: number | null
+  query_id: string | null
+  truncated: boolean
+  stats: Record<string, unknown>
+}
+
+export interface RunLog {
+  sql: string
+  started_at: number
+  ms: number
+  rows: number
+  bytes: number
+  cost_usd: number
+  status: 'ok' | 'error'
+  error: string | null
+}

@@ -24,15 +24,18 @@ services:
     networks: [network_swarm_public]
     environment:
       PROGRESS_DB: /data/progress.db
+      INTEGRATIONS_DIR: /run/secrets/dc
     volumes:
       - progress:/data
+      # provider credentials, written by deploy/set-integration.sh (root-only on the host)
+      - /opt/data-concepts/secrets:/run/secrets/dc:ro
     deploy:
       replicas: 1
       update_config:
         order: start-first
       resources:
         limits:
-          memory: 256M
+          memory: 384M
       labels:
         traefik.enable: "true"
         traefik.docker.network: network_swarm_public

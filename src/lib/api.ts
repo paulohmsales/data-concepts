@@ -1,5 +1,5 @@
 import { use } from 'react'
-import type { Catalog, ModuleContent, Market, Platforms, RoleBrief, SearchHit } from './content.ts'
+import type { Catalog, Integration, IntegrationKey, IntegrationStatus, ModuleContent, Market, Platforms, RoleBrief, RunLog, RunResult, SearchHit } from './content.ts'
 
 const cache = new Map<string, Promise<unknown>>()
 
@@ -28,3 +28,20 @@ export const useRoles = () => use(resource<{ roles: RoleBrief[]; market: Market 
 export const usePlatforms = () => use(resource<Platforms>('/api/platforms'))
 
 export const search = (q: string) => getJson<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`)
+
+/* ---------- integrations: content is cached; status, runs and history are always live ---------- */
+
+export const useIntegrations = () => use(resource<Integration[]>('/api/integrations'))
+export const integrationStatus = () => getJson<Record<IntegrationKey, IntegrationStatus>>('/api/integrations/status')
+export const integrationHistory = (key: IntegrationKey) => getJson<RunLog[]>(`/api/integrations/${key}/history`)
+
+export async function runQuery(key: IntegrationKey, sql: string, dryRun = false): Promise<RunResult> {
+  const res = await fetch(`/api/integrations/${key}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ sql, dry_run: dryRun }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `${res.status} ${res.statusText}`)
+  return body as RunResult
+}
