@@ -1,0 +1,96 @@
+slug: build-vs-buy
+title: Build vs buy
+track: data-leadership
+summary: comparing building a data tool with buying one over three years, including time to value, maintenance, vendor price growth and the opportunity cost of your engineers.
+roles: [mgr, de, ae]
+lab: build-vs-buy
+order: 3
+
+intuition: |
+  Data teams constantly choose between building a tool (an ingestion framework, a data catalog, an experimentation platform, a feature store) and buying one. The comparison usually goes wrong in the same way: someone compares the **licence fee** with the **engineering time to build it**, and building looks cheaper.
+
+  That leaves out most of the costs:
+
+  - **Time to value.** A bought tool is live in weeks; a built one in months. Every month of delay is value you never get back (the cost of delay from the prioritisation module).
+  - **Maintenance.** Built software needs people forever: upgrades, bugs, security, on-call, new requirements. It is often a third or more of the build effort every year.
+  - **Opportunity cost.** The engineers building a scheduler aren't building the things only your company can build.
+  - **Vendor growth.** Licences rise with usage and with yearly price increases, sometimes steeply.
+
+  The lab compares cumulative value minus cost over three years, month by month.
+
+experiments:
+  - title: The usual case
+    goal: A tool worth $40k/month once live. Build takes 3 engineers 6 months, then 1 maintainer; buying costs $8k/month (growing 30% a year with usage, plus 5% price rises) and 2 months to integrate.
+    setup: {}
+    look: After 3 years buying is ahead by about $480k ($887k vs $408k), even though the licence costs real money every month. The build line sits underwater for its first 6 months.
+    why: |
+      Four extra months of value ($160k) plus the build cost dwarf the licence. For tools that aren't your differentiator, buying usually wins.
+  - title: An expensive vendor
+    goal: The licence costs $25k a month.
+    setup: {licencePerMonth: 25000}
+    look: Building wins (about $408k vs −$54k), but build only overtakes buy in month 23. Before that, buying was ahead.
+    why: |
+      High licences favour building eventually, and “eventually” is the key word. If the tool, your needs or the vendor market may change within two years (they usually do), the build case rests on the far end of the forecast.
+  - title: The overrun
+    goal: Default costs, but the build takes 12 months instead of 6.
+    setup: {buildMonths: 12}
+    look: Building ends slightly negative after three years (about −$12k).
+    why: |
+      Internal tools commonly take about twice the estimate. Test the decision against a doubled build time; if the answer flips, the build case is fragile.
+  - title: The maintenance tail
+    goal: Maintenance needs 2.5 engineers instead of 1.
+    setup: {maintFte: 2.5}
+    look: Building ends about $267k underwater.
+    why: |
+      Platforms attract requests. Once a homegrown tool is used by ten teams, “one maintainer” becomes a team. Budget maintenance from comparable internal tools, not from optimism.
+  - title: What else could they build?
+    goal: Count the opportunity cost, $30k of value per engineer-month spent elsewhere.
+    setup: {opportunity: 30000}
+    look: Building drops to about −$1.0M, while buying barely changes.
+    why: |
+      Engineers are the scarcest resource. Spend them on what differentiates the business (your models, your product data, your domain logic) and buy the commodity plumbing.
+
+deep_dive:
+  - type: heading
+    text: Questions that decide it
+  - type: table
+    columns:
+      - {key: q, label: Question}
+      - {key: build, label: Points to build}
+      - {key: buy, label: Points to buy}
+    rows:
+      - {q: "Is it core to how we compete?", build: "Yes: proprietary models, pricing logic, unique data products", buy: "No: schedulers, ingestion connectors, BI, catalogs"}
+      - {q: "Do vendors cover 80% of our needs?", build: "No: unusual scale, domain or constraints", buy: "Yes, and the last 20% can wait or be built on top"}
+      - {q: "How fast do we need value?", build: "Not urgent", buy: "This quarter"}
+      - {q: "Can we staff it for years?", build: "A stable team with the skills", buy: "Small team, high turnover"}
+      - {q: "Lock-in and data control", build: "Strict residency or security requirements", buy: "Standard formats, exportable data, clear exit path"}
+      - {q: "How does cost scale?", build: "Vendor pricing explodes at our volume", buy: "Usage is modest or predictable"}
+  - type: heading
+    text: Doing the comparison honestly
+  - type: steps
+    items:
+      - title: Use total cost over 3 years
+        md: Build is engineering time to build plus maintenance, infrastructure, on-call and opportunity cost. Buy is licence (with growth and price rises), integration, admin and training. Both include migration and exit costs.
+      - title: Include time to value
+        md: Value delivered per month times months of delay. This is the term most often left out, and it often decides the outcome.
+      - title: Stress-test the estimates
+        md: Double the build time, add 50% to maintenance, triple vendor usage. A decision that survives these is robust.
+      - title: Consider the middle options
+        md: Open source with a managed service (Airflow on MWAA or Astronomer, dbt Cloud vs dbt Core), buy now and keep the data in open formats, or buy the platform and build the thin layer that's specific to you.
+      - title: Set a review point
+        md: Decide when you'd revisit (contract renewal, 10× usage) and what would change the answer.
+  - type: callout
+    kind: prod
+    md: Write the decision down (a one-page decision record with options, 3-year costs, assumptions and the stress tests). It forces the honest comparison, and when someone asks in two years why you built or bought, the reasoning is there, including which assumption turned out wrong.
+  - type: related
+    slugs: [prioritisation, slos, dbt, orchestration]
+
+interview:
+  - level: mid
+    q: Your team wants to build an internal data catalog. How do you evaluate that?
+    answer: Clarify the problem and users first (discovery, lineage, ownership, access requests). Compare 3-year total cost of building (build time, maintenance team, infra, opportunity cost) with buying or adopting open source (licence growth, integration, admin), including how many months sooner each delivers value. Check whether vendors cover the core needs and how locked in we'd be. A catalog is rarely a differentiator, so the bar for building is high.
+    listen_for: [Problem first, Total cost over time, Time to value, Differentiation test, Lock-in considerations]
+  - level: senior
+    q: A vendor's bill has tripled as usage grew, and engineers propose replacing it with an in-house tool. What do you do?
+    answer: Quantify both paths over 3 years with growth projections. Include the real build and maintenance cost and the migration risk, and stress-test estimates (build time often doubles). Explore cheaper middle options first, such as renegotiating, committing volume, reducing usage (sampling, retention, fewer events) or moving to an open-source managed alternative. If building still wins with margin under pessimistic assumptions, staff it properly, migrate incrementally, and set a checkpoint to stop if it overruns.
+    listen_for: [Quantified comparison, Stress testing, Middle options and negotiation, Incremental migration with checkpoints]

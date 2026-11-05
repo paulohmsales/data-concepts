@@ -282,3 +282,7 @@
   background: var(--good);
   color: #fff;
 }
+
+.understand {
+  margin-bottom: 1.75rem;
+}

@@ -36,9 +36,10 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
   const next = i >= 0 && i < modules.length - 1 ? modules[i + 1] : undefined
   const roleTitle = (k: string) => roles.find((r) => r.key === k)?.title ?? k
   const sections = [
+    ...(m.intuition ? [{ id: 'understand', label: 'Understand' }] : []),
     { id: 'lab', label: 'Lab' },
     { id: 'experiments', label: 'Experiments' },
-    { id: 'understand', label: 'Understand' },
+    ...(m.deep_dive.length ? [{ id: 'deep', label: 'Deep dive' }] : []),
     ...(m.interview.length ? [{ id: 'interview', label: 'Interview' }] : []),
     ...(m.check.length ? [{ id: 'check', label: 'Check yourself' }] : []),
   ]
@@ -90,6 +91,15 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
         ))}
       </nav>
 
+      {m.intuition && (
+        <section id="understand" className={`${styles.text} ${styles.understand}`}>
+          <h2>Understand</h2>
+          <div className={styles.intuition}>
+            <Markdown md={m.intuition} />
+          </div>
+        </section>
+      )}
+
       <div className={controls ? styles.stage : styles.stageWide}>
         <div className={styles.stageMain}>
           <section id="lab" className={styles.lab}>
@@ -109,21 +119,14 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
         )}
       </div>
 
-      <section id="understand" className={styles.text}>
-        <h2>Understand</h2>
-        {m.intuition && (
-          <div className={styles.intuition}>
-            <div className={styles.kicker}>The intuition</div>
-            <Markdown md={m.intuition} />
-          </div>
-        )}
-        {m.deep_dive.length > 0 && (
+      {m.deep_dive.length > 0 && (
+        <section id="deep" className={styles.text}>
+          <h2>Deep dive</h2>
           <div className={styles.deep}>
-            <div className={styles.kicker}>Deep dive</div>
             <Blocks blocks={m.deep_dive} />
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {m.interview.length > 0 && (
         <section id="interview" className={styles.text}>
