@@ -8,18 +8,41 @@ visual explanations and sandboxes you can break on purpose. See [PLAN.md](PLAN.m
 ## Modules
 
 Each module has four parts: **Intuition** (plain language), **Play** (live controls and charts),
-**Break it** (cause the classic failure yourself) and **Explain-back** (questions to answer in your own
-words in `notes/`).
+**Break it** (cause the classic failure yourself) and **Explain-back** (optional questions with
+reference answers).
 
-| Module | Route | Covers |
+| Area | Module | Route |
 |---|---|---|
-| A/B testing | `/ab-testing` | two-proportion z-test, p-values, power and sample size, peeking, winner's curse |
-| Snapshots and incremental loads | `/snapshots` | full reload vs watermark loads, SCD2 history, hard deletes, late-arriving rows, idempotent retries, "what did we know at T" |
+| Statistics | Central limit theorem | `/clt` |
+| | Confidence intervals | `/confidence-intervals` |
+| | The bootstrap | `/bootstrap` |
+| | Simpson's paradox | `/simpsons-paradox` |
+| | Regression to the mean | `/regression-to-the-mean` |
+| Experimentation | A/B testing | `/ab-testing` |
+| | Multiple comparisons | `/multiple-comparisons` |
+| | Sample ratio mismatch | `/sample-ratio-mismatch` |
+| | CUPED | `/cuped` |
+| Analytics engineering | Grain and join fan-out | `/join-fanout` |
+| | Window functions | `/window-functions` |
+| | Surrogate keys | `/surrogate-keys` |
+| Data engineering | Snapshots and incremental loads | `/snapshots` |
+| | Retries and idempotency | `/retries-idempotency` |
+| | Late data and watermarks | `/late-data` |
+| | Partitioning | `/partitioning` |
+| Data analysis | Cohorts and retention | `/cohorts` |
+| | Funnels | `/funnels` |
+| | Trend vs seasonality | `/trend-seasonality` |
+| Machine learning | Bias vs variance | `/bias-variance` |
+| | Train/test leakage | `/leakage` |
+| | Gradient descent | `/gradient-descent` |
+| | ROC curves and thresholds | `/roc-thresholds` |
+| | Class imbalance | `/class-imbalance` |
 
 Every simulation is checked against theory in tests (e.g. with no effect, ~5% of simulated A/B tests are
-significant; simulated power matches the formula within 2 points). The module 2 SQL runs on DuckDB-WASM
-in the browser and on native DuckDB in the tests, and each Break-it scenario has a test asserting it
-shows the failure it describes.
+significant; bootstrap and interval coverage match their promise where they should and fail where they
+should; AUC matches Φ(d/√2)). SQL modules run on DuckDB-WASM in the browser and on native DuckDB in the
+tests, with the same queries; the window-function evaluator is checked against DuckDB for every
+deterministic frame. Each Break-it failure has a test asserting it happens.
 
 ## Develop
 
@@ -52,8 +75,8 @@ password once. To change it, delete that file and redeploy.
 
 - `src/core/`: pure, unit-tested logic (stats, simulations, load jobs as SQL behind a `Db` interface)
 - `src/modules/<slug>/`: one folder per concept module, built on `ModuleLayout`
-- `src/components/`: shared UI (sliders, charts, stat tiles)
-- `src/lib/`: browser-only plumbing (DuckDB-WASM)
+- `src/components/`: shared UI (sliders, charts, stat tiles, SQL lab, explain-back)
+- `src/lib/`: browser-only plumbing (DuckDB-WASM, one schema per module)
 - `tests/`: Vitest tests
-- `notes/`: explain-back answers
+- `notes/`: optional explain-back answers
 - `deploy/`: Caddy config and deploy script

@@ -141,8 +141,13 @@ source changed mid-run, and running the same job twice (idempotency).
 | M3 | A/B UI | Views 1–5 built, all four template parts present | ✅ |
 | M4 | A/B polish | Explain-back answered, README with GIF, deployed to VPS | README + GIF ✅; deployed ✅; explain-back: later (optional) |
 | M5 | Module 2 | Spec, then the same M2–M4 cycle | Spec, core, UI ✅; deployed ✅; explain-back: later (optional) |
+| M6 | Backlog (§8) | Every backlog module built with the four parts, tested, deployed | ✅ 22 modules (2026-11-05) |
 
 ## 8. Backlog of later modules
+
+All built (M6). Data engineering “idempotency and retries” became *Retries and idempotency* (delivery
+semantics); retries of batch loads were already in module 2.
+
 
 - **Statistics:** central limit theorem · confidence intervals (100 intervals, some miss) · bootstrap ·
   Simpson's paradox · regression to the mean
@@ -193,3 +198,5 @@ data-concepts/
 | – | Who writes the core | Claude writes all code; you review and answer the explain-back | Your call: focus on understanding, not implementation | 2026-11-04 ✅ |
 | – | Module 2 engine | DuckDB-WASM in the browser, native DuckDB 1.4 in tests, same SQL | Real SQL, tested without a browser | 2026-11-04 ✅ |
 | – | Code splitting | Each module is a lazy route; DuckDB loads only on module 2 | Home and A/B stay ~85 kB gzipped; DuckDB WASM is ~8 MB | 2026-11-04 ✅ |
+| – | Explain-back | Optional: reference answers on each page; notes/ answers not required | Your call | 2026-11-05 ✅ |
+| – | SQL modules | Shared SqlLab on DuckDB-WASM, one schema per module; same SQL tested natively | Real SQL to edit, no backend | 2026-11-05 ✅ |
