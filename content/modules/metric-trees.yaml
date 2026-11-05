@@ -1,0 +1,80 @@
+slug: metric-trees
+title: KPI trees and explaining a metric change
+track: data-analysis
+summary: break a top-line metric into the drivers that multiply into it, attribute a week-over-week change to each one, and catch the mix effects that make healthy channels look broken.
+roles: [da, ds, mgr, ae]
+lab: metric-trees
+order: 4
+
+intuition: |
+  “Revenue is up 8%, why?” is the most common question an analyst gets. A **KPI tree** (metric tree, driver tree) answers it structurally. It writes the top metric as a product or sum of drivers, and those drivers in terms of smaller ones:
+
+  revenue = sessions × conversion rate × average order value
+
+  Each branch is something a team can own and act on: marketing owns sessions, product owns conversion, merchandising owns order value. When revenue moves, you walk down the tree and attribute the change to the branches that moved.
+
+  The trap is **mix**. Overall conversion is an average across channels. If more visitors arrive through a channel that converts poorly, overall conversion falls even though no channel got worse. A tree that stops at “conversion” sends the product team hunting for a bug that doesn't exist.
+
+experiments:
+  - title: The paid surge
+    goal: Marketing increases paid traffic by 60%. Nothing else changes.
+    setup: {paidSessions: 0.6}
+    look: Revenue rises from $184,750 to $199,600, while overall conversion falls from 2.95% to 2.73%. The waterfall shows +$31.8k from traffic and −$15.0k from channel mix, and zero change in conversion within any channel.
+    why: |
+      Paid visitors convert at 1.5%, half the average, so adding them lowers the average. Average order value dips too, because paid orders are smaller, which is also mix. The dashboard says “conversion down 7.5%”; the right answer is “nothing is broken, we bought lower-intent traffic”.
+  - title: A real problem
+    goal: Email conversion drops 30% (a broken link in the newsletter).
+    setup: {emailConv: -0.3}
+    look: Revenue falls to $163,750. The waterfall puts −$18.7k on conversion within channels, with no traffic or mix effect.
+    why: |
+      This is the signal worth a page: a within-channel rate change. Splitting conversion into mix and rate distinguishes “who came” from “how well we served them”.
+  - title: Price up, conversion down
+    goal: Raise prices 10%; conversion drops 8% in every channel.
+    setup: {price: 0.1, organicConv: -0.08, paidConv: -0.08, emailConv: -0.08}
+    look: Order value adds about +$17.7k and conversion takes about −$15.5k, a small net gain of about $2.2k.
+    why: |
+      Two teams will each see their own metric and draw opposite conclusions. The tree shows both effects side by side in the same currency, which is the only way to judge the trade-off (and it ignores the longer-term effect on returning customers).
+  - title: Everything at once
+    goal: Paid +60%, email traffic −20%, email conversion −10%, prices +5%.
+    setup: {paidSessions: 0.6, emailSessions: -0.2, emailConv: -0.1, price: 0.05}
+    look: Revenue is up about $4k overall, but the waterfall shows four separate movements, two of them large and opposite (traffic +$24k, mix −$20k).
+    why: |
+      A small net change can hide big offsetting moves. Each is a different conversation with a different team, and a single top-line number would have hidden all of them.
+
+deep_dive:
+  - type: heading
+    text: Building a tree
+  - type: steps
+    items:
+      - title: Start from the decision metric
+        md: Pick the metric leadership actually steers by (revenue, active users, gross margin, orders delivered on time). One tree per north-star metric.
+      - title: Decompose with identities, not correlations
+        md: Each split must hold exactly, as a product (sessions × conversion × AOV) or a sum (new + returning + reactivated users). Then the parts reconcile to the whole every time.
+      - title: Stop where someone can act
+        md: Go deeper only while a branch maps to a team or a lever. Leaves like “paid sessions from search” have owners; “sessions” alone doesn't.
+      - title: Add segments where averages mislead
+        md: Rates averaged across groups (channels, countries, devices) need a mix vs rate split, or you'll misread shifts in composition as performance changes (Simpson's paradox in slow motion).
+      - title: Put it in the semantic layer
+        md: Define each node once (dbt metrics, a semantic layer, or a governed table) so the tree and every dashboard use the same definitions.
+  - type: heading
+    text: Attributing a change
+  - type: formula
+    text: "for R = S × C × A:   ΔR ≈ L·ln(S₁/S₀) + L·ln(C₁/C₀) + L·ln(A₁/A₀),  L = (R₁ − R₀) / (ln R₁ − ln R₀)        mix = Σ Δwᵢ·cᵢ⁰,  rate = Σ wᵢ¹·Δcᵢ"
+  - type: markdown
+    md: |
+      Multiplicative trees don't split changes uniquely: “+10% sessions and +10% conversion” produces +21% revenue, and the extra 1% belongs to both. The **log-mean (LMDI) decomposition** used in the lab splits it symmetrically and always adds up exactly. Simpler sequential methods (change sessions first, then conversion, then AOV) work too, but the answer depends on the order. Whatever you choose, document it and use it consistently.
+  - type: callout
+    kind: prod
+    md: Automate the first pass. A weekly job that computes the tree, the decomposition and the top movers by segment answers most “why did the metric move?” questions before they're asked, and frees analysts for the ones that need judgement. Annotate known events (campaigns, releases, outages) on the same chart.
+  - type: related
+    slugs: [simpsons-paradox, funnels, trend-seasonality, cohorts, prioritisation]
+
+interview:
+  - level: mid
+    q: Revenue dropped 10% week over week. How do you investigate?
+    answer: Check the data first (pipeline freshness, definitions, partial days). Then decompose revenue into its drivers (traffic × conversion × order value) and see which moved. Segment the moving driver by channel, platform, country and new vs returning, separating mix shifts from within-segment rate changes. Compare with seasonality (same week last year) and known events, then quantify each cause's contribution and confirm the hypothesis with a targeted query.
+    listen_for: [Data validation first, Driver decomposition, Segmentation with mix vs rate, Seasonality and events, Quantified contributions]
+  - level: senior
+    q: Overall conversion fell, but every channel's conversion is flat. What's happening, and how do you present it?
+    answer: A mix shift. Traffic moved toward lower-converting channels or segments, so the weighted average fell. Show the mix vs rate decomposition with a waterfall, explain that the product is converting as before, and redirect the question to whether the new traffic is worth its cost (revenue per session or contribution margin by channel). Suggest dashboards report conversion by segment alongside the blended figure.
+    listen_for: [Recognises mix vs rate, Clear visual decomposition, Reframes to the right business question, Prevents recurrence in reporting]
