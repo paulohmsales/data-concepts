@@ -1,0 +1,171 @@
+slug: dimensional-modeling
+title: Dimensional modelling
+track: analytics-engineering
+summary: facts, dimensions and grain; slowly changing dimensions that keep (or rewrite) history; late-arriving rows; and combining two fact tables without fan-out.
+roles: [ae, de, da]
+lab: dimensional-modeling
+order: 4
+
+intuition: |
+  A dimensional model splits data into **facts** (things that happened and can be measured: a sale, a return, a page view) and **dimensions** (the context you slice by: customer, product, date). Each fact row points at its dimensions through keys, forming a **star**: one fact table in the middle, dimensions around it.
+
+  The design decisions that matter most are:
+
+  - **Grain:** what one fact row means (one order line? one order? one day per store?). Declare it first; everything else follows.
+  - **History:** when a customer moves region, should last quarter's report move with them? A **type 1** dimension overwrites and rewrites history; a **type 2** dimension keeps a new row per version, so each fact can join to the version that was true when it happened.
+  - **Conformance:** two fact tables can only be compared through dimensions they share with identical keys and labels.
+
+  Get these right and every report adds up. Get them wrong and the numbers change when nobody touched them, or double when two tables are joined.
+
+experiments:
+  - title: History as it was
+    goal: Attribute Q1 sales to the region the customer was in at the time of each sale (type 2, joined on the validity range).
+    setup: {history: t2}
+    look: North 240, South 150, Unknown 60. Ana's two Q1 sales count for North, where she lived then. The total reconciles to 450.
+    why: |
+      Each fact joins to exactly one version of the customer, the one whose valid_from ≤ sale_date < valid_to. The Q1 report gives the same answer whenever you run it.
+  - title: History rewritten
+    goal: Use a type 1 dimension (region overwritten when Ana moved).
+    setup: {history: t1}
+    look: North drops to 100 and South rises to 290. The total still matches, so nothing looks broken, but last quarter's North figure changed after the report was published.
+    why: |
+      A type 1 dimension only knows today's value, so it answers “where are my customers now?”, not “where were they when they bought?”. Type 2 joined to the current row gives the same as type 1, so a type 2 dimension can answer both questions.
+  - title: The type 2 trap
+    goal: Join the type 2 dimension on customer_id only, forgetting the date range.
+    setup: {history: t2bug}
+    look: The total becomes 590 instead of 450. Ana's 140 is counted in both North and South.
+    why: |
+      A type 2 dimension has several rows per natural key, so joining on the natural key fans out. Either join on the surrogate key stored in the fact at load time, or join on the natural key plus the validity range. A uniqueness test on the join result catches it.
+  - title: The disappearing sale
+    goal: Inner join facts to a dimension that hasn't received Davi yet.
+    setup: {late: inner}
+    look: The Q1 total is 390, so 60 has vanished with no error and no NULL row.
+    why: |
+      Inner joins drop facts whose dimension row is missing (late-arriving dimension, a bad key, a failed sync). The report is silently wrong.
+  - title: The unknown member
+    goal: Load such facts with customer_sk = −1, pointing at an “Unknown” row.
+    setup: {late: unknown}
+    look: The total reconciles to 450, with 60 visibly under Unknown.
+    why: |
+      Every fact has a valid key, so any join (including the inner joins BI tools generate) keeps it. The Unknown bucket is a monitored data quality signal, and the rows can be re-keyed when Davi arrives.
+  - title: Joining two facts
+    goal: Compute return rate by joining fact_sales to fact_returns on product.
+    setup: {across: fanout}
+    look: Footwear shows a 100% return rate and Apparel 86%. The real rates are 38.5% and 28.6%.
+    why: |
+      Each sale matches every return of the same product, so both sums are multiplied. Facts at different grains never join to each other directly.
+  - title: Drill across
+    goal: Aggregate each fact to category on its own, then join the results through the conformed dim_product.
+    setup: {across: conformed}
+    look: Footwear 38.5%, Apparel 28.6%. Then try each system's own categories, where the returns system calls footwear “Shoes”, and watch the rows fail to line up.
+    why: |
+      Drill-across means summarising each fact at the shared grain, then joining the summaries on conformed dimension attributes. Conformed means the same keys and labels everywhere, which is exactly what a shared dim_product provides and a per-system category list doesn't.
+
+deep_dive:
+  - type: heading
+    text: The star
+  - type: stepper
+    key: diagram.flow
+    props:
+      nodes:
+        - {id: date, label: dim_date, sub: "day, week, fiscal period, holiday", col: 0, row: 0}
+        - {id: cust, label: dim_customer, sub: "type 2: one row per version", col: 2, row: 0}
+        - {id: sales, label: fact_sales, sub: "grain: one order line", col: 1, row: 1}
+        - {id: prod, label: dim_product, sub: "conformed: shared by both facts", col: 1, row: 2}
+        - {id: rets, label: fact_returns, sub: "grain: one returned item", col: 2, row: 2}
+        - {id: store, label: dim_store, col: 0, row: 2}
+      edges:
+        - {from: sales, to: date}
+        - {from: sales, to: cust}
+        - {from: sales, to: prod}
+        - {from: sales, to: store}
+        - {from: rets, to: prod}
+    steps:
+      - title: Declare the grain
+        md: “One row per order line” decides what can be summed (quantity, line amount) and what can't be stored here (an order-level shipping fee would be repeated on every line; allocate it or put it in an order-grain fact).
+        state: {active: [sales]}
+      - title: Dimensions give context
+        md: Wide, denormalised, descriptive tables. A fact stores only keys and measures; everything you'd filter or group by lives in dimensions.
+        state: {active: [sales, date, cust, store]}
+      - title: Conformed dimensions connect facts
+        md: dim_product is shared by sales and returns with the same keys and labels, so “return rate by category” is answerable. A dimension used by one fact only is fine, but it can't connect anything.
+        state: {active: [sales, prod, rets]}
+      - title: Never join fact to fact
+        md: Sales and returns have different grains. Joining them directly multiplies rows (the lab shows 100% returns). Summarise each to the shared grain, then join.
+        state: {active: [sales, rets], bad: [sales, rets]}
+  - type: heading
+    text: Slowly changing dimensions
+  - type: stepper
+    key: ae.scdTimeline
+    steps:
+      - title: Type 1 overwrites
+        md: One row per customer. When Ana moves, her region is updated in place, and every past sale now reports South.
+        state: {mode: t1}
+      - title: Type 2 keeps versions
+        md: A new row (new surrogate key) per change, with valid_from and valid_to. Each sale joins to the version valid on its date, or the fact stores that version's surrogate key at load time.
+        state: {mode: t2}
+      - title: Joining on the natural key alone
+        md: Every sale matches every version of Ana, and her revenue is counted twice. Test that each fact matches exactly one dimension row.
+        state: {mode: t2bug}
+  - type: table
+    columns:
+      - {key: type, label: Type}
+      - {key: how, label: What happens on change}
+      - {key: use, label: Use when}
+    rows:
+      - {type: "0", how: "Never changes (original value kept)", use: "Attributes fixed at creation: signup date, original channel"}
+      - {type: "1", how: "Overwrite in place", use: "Corrections, or attributes nobody analyses historically (a typo in a name)"}
+      - {type: "2", how: "New row per version, with validity dates and a current flag", use: "Anything reports should attribute as of the event: region, plan, segment, sales owner"}
+      - {type: "3", how: "Keep the previous value in an extra column", use: "One planned change compared side by side (old vs new territory)"}
+      - {type: "Snapshot", how: "A full copy per day (dbt snapshots or daily partitions)", use: "Simple to build; storage-heavy; join on snapshot date"}
+  - type: heading
+    text: Kinds of fact tables
+  - type: table
+    columns:
+      - {key: kind, label: Kind}
+      - {key: grain, label: Grain}
+      - {key: ex, label: Example}
+      - {key: sum, label: "Additive?"}
+    rows:
+      - {kind: Transaction, grain: "One row per event", ex: "Order lines, payments, clicks", sum: "Fully additive"}
+      - {kind: Periodic snapshot, grain: "One row per entity per period", ex: "Account balance per day, inventory per week", sum: "Not across time (sum balances over days is meaningless; use average or last)"}
+      - {kind: Accumulating snapshot, grain: "One row per process instance, updated as it progresses", ex: "Order with placed/paid/shipped/delivered timestamps", sum: "Durations and counts per milestone"}
+      - {kind: Factless, grain: "One row per relationship or event with no measure", ex: "Student enrolled in course; promotion eligibility", sum: "Count rows"}
+  - type: heading
+    text: Star, one big table, or Data Vault?
+  - type: table
+    columns:
+      - {key: m, label: Approach}
+      - {key: good, label: Strengths}
+      - {key: bad, label: Weaknesses}
+    rows:
+      - {m: Star schema (Kimball), good: "Clear grain, reusable conformed dimensions, BI-friendly, history via SCD2", bad: "Requires modelling effort and joins at query time"}
+      - {m: One big table (OBT), good: "No joins for analysts; columnar warehouses compress repeated values well", bad: "History and corrections mean rebuilding wide tables; grain confusion; duplicated logic across OBTs"}
+      - {m: Data Vault, good: "Auditable, insert-only, absorbs many changing sources", bad: "Not for querying directly; needs a presentation layer (usually stars) on top"}
+  - type: callout
+    kind: prod
+    md: A common modern layout is staging models that clean each source, a core layer of conformed dimensions and facts (star schemas), and wide OBT-style marts built from the stars for specific dashboards. The stars are the single source of truth; marts are disposable views of it.
+  - type: related
+    slugs: [surrogate-keys, join-fanout, snapshots, window-functions]
+
+interview:
+  - level: junior
+    q: What is the difference between a fact and a dimension?
+    answer: A fact table records events or measurements at a declared grain (a sale, a click), with numeric measures and keys to dimensions. A dimension holds descriptive context used to filter and group (customer, product, date). Facts are long and narrow; dimensions are wide and comparatively small.
+    listen_for: [Events vs context, Measures and keys, Grain]
+  - level: mid
+    q: What is the grain of a fact table and why declare it first?
+    answer: The grain is what one row represents, such as one order line or one account per day. It decides which measures can live in the table and be summed, and which dimensions apply. Mixing grains (order-level shipping fees on order-line rows) causes double counting.
+    listen_for: [Definition, Determines additive measures, Mixed-grain double counting]
+  - level: mid
+    q: Explain SCD type 1 vs type 2 and when you'd use each.
+    answer: Type 1 overwrites the attribute, so history is restated to the current value; use it for corrections or attributes not analysed historically. Type 2 inserts a new row per change with validity dates and a new surrogate key, so facts can be attributed as of the event; use it for region, plan, owner, segment. Type 2 can also answer current-state questions by joining to the current row.
+    listen_for: [Overwrite vs versioned rows, Validity dates and surrogate keys, Correct use cases, Type 2 can do both]
+  - level: senior
+    q: Finance says last quarter's revenue by region changed between two runs of the same report, though no sales were added. What could cause it?
+    answer: The likeliest cause is a type 1 (or rebuilt) customer dimension, where customers who moved region took their past revenue with them. Other causes are a type 2 dimension joined to the current row instead of as-of the sale date, late-arriving dimension rows that moved revenue out of Unknown, re-keyed surrogate keys after a rebuild, or backfilled corrections. Check by diffing attribution per sale between runs, then fix with type 2 joined as of the event date and published-report snapshots if finance needs frozen numbers.
+    listen_for: [SCD type 1 restating history, As-of joins, Late-arriving rows, Diff per fact to find the cause, Frozen snapshots for published numbers]
+  - level: senior
+    q: How do you compute a metric that needs two fact tables, such as return rate by category?
+    answer: Drill across. Aggregate each fact separately to the shared grain using conformed dimensions (category from the same dim_product), then join the aggregates. Never join the facts directly, because rows multiply. If the systems label things differently, conform them first, by mapping both to one dimension with the same keys.
+    listen_for: [Drill across, Aggregate before joining, Conformed dimensions, Recognises fan-out]
