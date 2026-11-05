@@ -87,3 +87,11 @@ interview:
     q: Your DiD shows a big positive effect, but a colleague says the treated cities were already growing faster. What do you do?
     answer: Look at the event study. If pre-period gaps trend upward, parallel trends fails and the estimate is biased upward. Options are a better-matched control group (matching on pre-trends), synthetic control, or group-specific trends (sensitive to modelling choices). Placebo tests with fake launch dates help, as do sensitivity analyses showing how much trend deviation would erase the effect. Report the uncertainty honestly and, for future launches, randomise which cities get treated.
     listen_for: [Event study diagnosis, Synthetic control or matching, Placebo and sensitivity analysis, Randomised rollout recommendation]
+
+check:
+- q: Write the DiD estimate in words.
+  a: '(Treated after − treated before) − (control after − control before): the treated group''s change minus the change the control group experienced over the same period.'
+- q: What is the key assumption, and how do you check it?
+  a: 'Parallel trends: without treatment, both groups would have moved together. Check with an event study; the pre-period gaps should hover around zero rather than trend.'
+- q: Why can before/after and treated-vs-control both get the sign wrong?
+  a: Before/after absorbs growth and seasonal events; treated-vs-control absorbs the groups' pre-existing level difference. In the lab both said positive when the policy hurt.

@@ -135,3 +135,11 @@ interview:
     q: A Spark job's last stage has 999 tasks done in a minute and one running for an hour. Diagnose and fix.
     answer: Classic skew. Confirm in the Spark UI (max vs median shuffle read size and duration) and find the hot key (often null, 'unknown' or a default value, or one huge customer). Fixes are enabling AQE skew join, handling the hot key separately (filter nulls before joining, or join them via broadcast), salting the key on the large side and replicating the small side, or broadcasting the smaller table if possible. More executors won't help because the straggler is one task.
     listen_for: [Skew diagnosis in the UI, Identify the hot key, AQE skew join, Salting or separate handling, More executors won't help]
+
+check:
+- q: When does Spark broadcast a table, and why is it faster?
+  a: When one side is under autoBroadcastJoinThreshold (10 MB by default) or hinted. Each executor gets a full copy and joins its slice of the big table locally, with no shuffle of the big side.
+- q: Your reduce tasks spill to disk. What do you change?
+  a: Increase spark.sql.shuffle.partitions (aim for about 100–200 MB per partition), or let AQE coalesce from a high number. Spill means a partition doesn't fit in task memory.
+- q: One task runs for an hour while 999 finish in seconds. Diagnosis and fixes?
+  a: 'Skew: one join key holds a huge share of rows. Enable AQE skew join, handle the hot key separately (often nulls or ''unknown''), salt the key, or broadcast the small side. More executors don''t help.'

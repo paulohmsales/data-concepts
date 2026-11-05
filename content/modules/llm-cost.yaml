@@ -104,3 +104,11 @@ interview:
     q: An LLM feature’s monthly cost tripled after launch. How do you bring it down without hurting quality?
     answer: Attribute cost first (per feature, route, customer; input vs output; which prompt parts). Then trim and cache stable prefixes, cap and shorten outputs, retrieve less but better context, route easy requests to a smaller model behind an eval gate, batch offline work, and cache repeated answers. Verify every change with the eval suite and watch quality metrics in production.
     listen_for: [Attribution before optimisation, Ordered levers, Quality guarded by evals]
+
+check:
+- q: What usually dominates the cost of a RAG request, and why?
+  a: 'Input tokens: the retrieved context and system prompt are often thousands of tokens, while the answer is a few hundred. Trimming context (better retrieval, fewer chunks) and caching the stable prompt prefix cut cost most.'
+- q: How does prompt caching cut cost and latency?
+  a: A repeated prompt prefix (system prompt, tools, long documents) is processed once and reused, so later requests pay a reduced rate for those tokens and skip recomputing them, which also shortens time to first token.
+- q: When is routing to a smaller model a good idea?
+  a: When an eval shows the small model is good enough for a class of requests (simple, classified, short). Route those to it and keep the large model for the hard cases, measuring quality per route.

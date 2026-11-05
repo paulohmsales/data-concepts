@@ -98,3 +98,11 @@ interview:
     q: Your team keeps blowing its error budget. What do you do as a manager?
     answer: Apply the agreed policy (pause feature work for reliability), then find the causes from incidents (deploy-related, upstream, capacity) and fund fixes for the biggest one. That might be CI tests, staged rollouts, upstream contracts and freshness alerts, or capacity. Check the SLO is right, renegotiating with stakeholders if it is stricter than the need. Report progress in budget terms.
     listen_for: [Uses the policy, Root causes by category, Invests in the top cause, Revisits the SLO honestly]
+
+check:
+- q: Define SLI, SLO and error budget for a daily table.
+  a: 'SLI: was the table ready by 07:00 today (yes/no). SLO: ready on 95% of days per quarter. Error budget: the misses the SLO allows, 5% × 90 = 4.5 days.'
+- q: Why is a 99.9% SLO meaningless for a daily product?
+  a: With 90 measurements a quarter the budget is 0.09 days, so one late day breaches it. Useful targets allow a whole number of misses (90%, 95%, 97%, 99%).
+- q: What makes an error budget change behaviour?
+  a: 'A policy agreed in advance: while budget remains, ship freely; when it''s spent, only reliability work ships until it recovers.'

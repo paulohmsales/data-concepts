@@ -85,3 +85,11 @@ interview:
     q: What are the risks of hedged requests?
     answer: Extra load (bounded if you hedge only after ~p95, but dangerous when the slowness is caused by overload, because hedging then adds load to a struggling system). They need idempotent or read-only operations, and should cancel the losing request. Cap the hedge rate and disable hedging when error rates or queue depths are high.
     listen_for: [Load amplification under overload, Idempotency, Cancellation, Adaptive limits]
+
+check:
+- q: A request fans out to 50 services, each with p99 = 200 ms. What share of requests wait at least 200 ms?
+  a: 1 − 0.99⁵⁰ ≈ 40%. With fan-out, one component's rare slow tail becomes common for the whole request.
+- q: Why can't you average per-host p99s to get the fleet p99?
+  a: 'Percentiles don''t average: the fleet''s p99 depends on the full distributions. Aggregate histograms (or t-digests) and compute the percentile from the combined data.'
+- q: What are hedged requests, and what's the risk?
+  a: Send a second copy after about the p95 delay and use whichever answers first. It cuts tail latency for a few percent extra load, but under overload it adds load to a struggling system, and it needs idempotent operations.

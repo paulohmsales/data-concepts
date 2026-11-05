@@ -88,3 +88,11 @@ interview:
     q: Design an experiment to measure the effect of a new delivery fee on orders and courier utilisation.
     answer: A switchback by city and time block (e.g. 1–2 hours), randomised and stratified so each hour of the week gets both arms, with a burn-in after each switch and several weeks across many cities for power. Primary metrics are orders and completed deliveries per block; guardrails are delivery time, courier earnings and cancellations. Analyse at the block level with cluster-robust intervals and variance reduction from pre-period data. Optionally pair it with a user-level test to compare price sensitivity across segments.
     listen_for: [Switchback with justified block length, Stratification and burn-in, Block-level analysis, Guardrail metrics on both sides]
+
+check:
+- q: Why does a user-level A/B test overstate a rider discount's effect when drivers are scarce?
+  a: Treated and control riders share the same drivers, so treated riders' extra rides partly come from the control group. The test measures the gap between groups, not the market-wide gain.
+- q: What does a switchback randomise, and what does it cost?
+  a: 'Time slots (city × block): everyone is treated or not for a block. It is unbiased for the market effect but has far fewer units, so it is noisier and needs more time.'
+- q: How do you choose the block length?
+  a: Longer than the carryover after a switch, short enough to get many blocks, balanced across hours of the week, with a burn-in excluded after each switch.

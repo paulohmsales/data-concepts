@@ -92,3 +92,11 @@ interview:
     q: You own a churn model whose labels arrive 60 days late. How do you monitor and maintain it?
     answer: Monitor data quality and input and prediction drift daily as early warnings, plus proxy outcomes that arrive sooner (activity drops, cancellations started). Track true performance and calibration by segment as labels arrive. Retrain on a schedule or on drift triggers with champion–challenger evaluation, keep a small holdout to measure lift, and alert the business when proxy metrics deteriorate before labels confirm it.
     listen_for: [Early-warning signals, Proxy labels, Segment-level performance, Controlled retraining, Holdout for measurement]
+
+check:
+- q: Covariate drift vs concept drift?
+  a: 'Covariate drift: the input distribution P(x) changes while P(y|x) stays the same. Concept drift: P(y|x) changes, so the learned relationship is wrong even if inputs look identical.'
+- q: Why can PSI alarm while the model is fine?
+  a: PSI only measures how much inputs moved. Under pure covariate drift the model's learned relationship still holds, so accuracy can stay high despite a large PSI.
+- q: What do delayed labels mean for monitoring?
+  a: True performance is only known weeks later. Use input and prediction drift as early warnings, find proxy labels that arrive sooner, and retrain with the freshest labels available.

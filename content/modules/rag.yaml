@@ -149,3 +149,11 @@ interview:
     q: How do you choose chunk size?
     answer: Empirically, on a golden set. Measure recall@k and context length across a few sizes and overlaps for your documents and question types. Small chunks match precisely but cut answers and lose context; big chunks contain answers but dilute the match and cost tokens. Structure-aware splits and small-to-big retrieval often beat any single fixed size.
     listen_for: [Measured, not guessed, The precision vs context trade-off, Structure-aware or parent–child options]
+
+check:
+- q: What are the two halves of a RAG system, and which usually fails first?
+  a: 'Retrieval (find the right chunks) and generation (answer from them). Retrieval usually fails first: if the right chunk isn''t in the context, no model can answer correctly, so measure recall@k before tuning prompts.'
+- q: Why can keyword search (BM25) miss a relevant document?
+  a: It matches words, not meaning. “My salary is wrong” shares no terms with “payroll questions go to the people team”, so BM25 scores it zero. Embeddings or hybrid search close that vocabulary gap.
+- q: What goes wrong with chunks that are too big or too small?
+  a: 'Too big: the relevant sentence is diluted and uses context tokens, so ranking and answers get worse. Too small: a chunk loses the context it needs to be understood or matched. Chunk by structure (sections) at a moderate size, with headings prepended.'

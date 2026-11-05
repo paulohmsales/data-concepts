@@ -141,3 +141,13 @@ interview:
     q: How would you test whether a new surge algorithm is better?
     answer: Riders and drivers in the same area interact, so randomising by user contaminates the comparison. Use switchback tests (alternate the algorithm by city and time slot) or geo-randomisation by region, with enough slots for power. Measure completion rate, wait time, cancellations, driver earnings and rider retention, and guardrails on extreme multipliers.
     listen_for: [Interference between units, Switchback or geo design, Market-level metrics, Guardrails]
+
+check:
+- q: Why is surge pricing a streaming problem rather than a warehouse query?
+  a: It needs per-area counts over the last few minutes, refreshed every 30–60 s, read by thousands of apps per second. Stateful stream processing keeps small per-cell state in memory; the warehouse is for history.
+- q: What does a 1-minute window with tiny cells get wrong?
+  a: Each estimate rests on very few events, so Poisson noise triggers surge in quiet areas (about 39% false surges in the lab).
+- q: What does a 15-minute window get wrong?
+  a: 'It lingers: the window still contains the busy minutes long after the crowd has gone, so riders pay surge with no shortage, and it rises slowly.'
+- q: How should riders read the price?
+  a: From a key-value cache keyed by cell id (Redis), with a short TTL and a fallback to 1× if missing, never by querying the stream processor.

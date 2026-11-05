@@ -78,3 +78,11 @@ interview:
     q: Overall conversion fell, but every channel's conversion is flat. What's happening, and how do you present it?
     answer: A mix shift. Traffic moved toward lower-converting channels or segments, so the weighted average fell. Show the mix vs rate decomposition with a waterfall, explain that the product is converting as before, and redirect the question to whether the new traffic is worth its cost (revenue per session or contribution margin by channel). Suggest dashboards report conversion by segment alongside the blended figure.
     listen_for: [Recognises mix vs rate, Clear visual decomposition, Reframes to the right business question, Prevents recurrence in reporting]
+
+check:
+- q: Write revenue as a three-driver tree.
+  a: Revenue = sessions × conversion rate × average order value.
+- q: Overall conversion fell but every channel's conversion is flat. What happened?
+  a: 'A mix shift: more traffic came from lower-converting channels, so the weighted average fell. Nothing got worse within any channel.'
+- q: Why use a log-mean (LMDI) decomposition for a multiplicative tree?
+  a: Changes in multiplied drivers interact, so splitting the total depends on order in sequential methods. LMDI splits it symmetrically, and the parts always add up exactly to the total change.

@@ -106,3 +106,11 @@ interview:
     q: You must reprocess two years of daily partitions after a logic fix, without affecting today's pipelines. Plan it.
     answer: Make the job idempotent per partition and parameterised by date, and test on a few days. Write into a new table or versioned path, run in a separate pool or queue at low priority with concurrency sized to warehouse and source limits (most recent months first if they matter most), monitor cost and progress, reconcile old vs new totals per day, then swap atomically and communicate the change in historical numbers.
     listen_for: [Idempotent per partition, Isolation from production, Concurrency sizing, Reconciliation, Atomic swap and communication]
+
+check:
+- q: Why did a backfill make today's data late in the lab?
+  a: First-come-first-served gave the backfill's earlier-queued tasks every free slot, so today's run waited behind hundreds of old tasks.
+- q: What is the cheapest fix, and what does depends_on_past do to it?
+  a: Give today's run priority (priority_weight, a separate pool or queue); it needs few slots, so the backfill barely slows down. With depends_on_past, today waits for every previous day, so no priority can help.
+- q: Name two rules that make backfills safe.
+  a: Make runs idempotent per partition (overwrite exactly that date) and parameterise by the logical date, never now(). Also isolate backfills from production capacity and reconcile before swapping results in.

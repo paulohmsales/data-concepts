@@ -169,3 +169,13 @@ interview:
     q: How do you compute a metric that needs two fact tables, such as return rate by category?
     answer: Drill across. Aggregate each fact separately to the shared grain using conformed dimensions (category from the same dim_product), then join the aggregates. Never join the facts directly, because rows multiply. If the systems label things differently, conform them first, by mapping both to one dimension with the same keys.
     listen_for: [Drill across, Aggregate before joining, Conformed dimensions, Recognises fan-out]
+
+check:
+- q: What is the grain of a fact table, and why declare it first?
+  a: What one row represents (one order line, one account per day). It decides which measures can be summed and which dimensions apply; mixing grains causes double counting.
+- q: Type 1 vs type 2 slowly changing dimension in one sentence each.
+  a: Type 1 overwrites the attribute, so history is restated to today's value. Type 2 adds a new row per version with validity dates, so each fact joins to the version true when it happened.
+- q: Joining a type 2 dimension on the natural key alone doubled a total. Why?
+  a: The dimension has several rows per natural key (one per version), so each fact matches all of them. Join on the surrogate key stored at load time, or on the natural key plus the validity range.
+- q: How should you compute a metric that needs two fact tables?
+  a: 'Drill across: aggregate each fact separately to the shared grain using conformed dimensions, then join the aggregates. Joining facts directly fans out.'

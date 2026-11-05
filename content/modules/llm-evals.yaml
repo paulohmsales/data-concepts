@@ -119,3 +119,11 @@ interview:
     q: Your new prompt scores 78% vs 75% for the old one on 100 eval items. Ship it?
     answer: Not on that evidence alone. With 100 items each rate has about ±8 points of margin. A paired test on the items where they disagree is the right analysis, and it probably isn’t significant. Look at which items flipped (are the new failures worse?), check per-slice results and must-pass cases, expand the set or run an online A/B test if the stakes justify it, and consider cost and latency differences too.
     listen_for: [Recognises noise, Paired analysis, Inspects flipped items and slices, Next step to get evidence]
+
+check:
+- q: Why is a 50-example eval set risky for deciding between two prompts?
+  a: 'The uncertainty is large: a 70% score on 50 examples has a 95% interval of roughly ±13 points. Compare prompts on the same examples (paired, e.g. McNemar) and report intervals, or collect more examples.'
+- q: Name two biases of LLM-as-judge and a mitigation for each.
+  a: 'Position bias (prefers the first answer): judge both orders and average. Verbosity or self-preference (favours long or same-model answers): use rubrics, length-controlled comparisons and agreement checks against human labels (e.g. kappa).'
+- q: What makes a good golden set?
+  a: Real user questions covering the important intents and known failure cases, with reference answers or rubrics, versioned and kept separate from anything used to tune prompts.

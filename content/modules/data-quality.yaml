@@ -143,3 +143,13 @@ interview:
     q: A VP says “I don’t trust the numbers.” How do you approach data quality across the org?
     answer: Find the specific incidents behind the distrust and their causes. Define critical data products and owners, and give each tiered checks (tests, freshness, volume, reconciliation to source). Add contracts with the main producing teams, and publish visible status so users can see whether a dashboard is healthy. Run incidents with postmortems, and track metrics like incidents caught before users, time to detect and time to resolve. Trust is rebuilt by catching problems first and communicating them.
     listen_for: [Start from concrete incidents, Ownership and tiers, Contracts upstream, Visible health status, Measured improvement]
+
+check:
+- q: What do tests catch that monitors miss, and vice versa?
+  a: Tests check known rules precisely (unique keys, not null, relationships, freshness) but only what you thought of. Monitors learn normal behaviour (volume, distributions) and catch unknown problems, at the risk of false alarms.
+- q: Why did a fixed row-count threshold fail in the lab?
+  a: Weekends normally load far fewer rows, so any threshold low enough to stay quiet on weekends is blind to a weekday that lost 40% of its data, and any higher threshold alarms every weekend.
+- q: Why compare against the median of the same weekday over recent weeks?
+  a: It removes the weekly pattern, so what's left is mostly noise, and the median ignores a single bad week in the history.
+- q: What does a data contract specify?
+  a: Schema (names, types, nullability), semantics (grain, units, meaning), an SLA (freshness, completeness) and ownership, checked in the producer's CI so breaking changes fail before they reach consumers.

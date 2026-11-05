@@ -128,3 +128,13 @@ interview:
     q: A topic has 6 partitions and the team wants to scale to 20 consumers. What do you advise?
     answer: Twenty consumers on 6 partitions leaves 14 idle, so parallelism needs more partitions. Increasing partitions remaps keys (hash mod n), breaking per-key ordering for in-flight keys; do it during low traffic, or create a new topic with the right count and migrate consumers. Choose a count with headroom and good divisors (e.g. 24 or 60), check the per-consumer bottleneck (maybe the sink), and consider whether faster processing per consumer is cheaper.
     listen_for: [Partition cap on parallelism, Key remapping on increase, Migration strategy, Find the real bottleneck]
+
+check:
+- q: Why can't more consumers than partitions help?
+  a: Each partition is read by exactly one consumer in a group, so extra consumers sit idle. Parallelism is capped by the partition count.
+- q: 4 consumers each handle 1,500 msg/s, 6 partitions, 6,000 msg/s total. Why does lag still grow?
+  a: 'Partitions are assigned whole: two consumers own two partitions (2,000/s each, overloaded) while two own one (1,000/s, half idle). Uneven assignment wastes capacity.'
+- q: How do you fix a hot key that overloads one partition?
+  a: 'Change the key: salt it (key#0…key#7) and recombine downstream, use a finer key, or pre-aggregate before producing. More consumers can''t help, because one partition has one consumer.'
+- q: Eager vs cooperative rebalance?
+  a: Eager stops every consumer while the group re-joins, so lag spikes. Cooperative only pauses the partitions that move.

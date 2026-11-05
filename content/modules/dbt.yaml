@@ -133,3 +133,11 @@ interview:
     q: An incremental model has been silently missing about 2% of events for months. How might that happen and how do you prevent it?
     answer: Likely late-arriving data older than the lookback window (or a filter on load time vs event time), a missing or wrong unique_key causing overwrites, or a logic change never full-refreshed. Prevent it with reconciliation tests against the source (counts per day), lateness monitoring to size the lookback, scheduled full refreshes or wide reprocessing, and filters on ingestion time rather than event time where appropriate.
     listen_for: [Lookback vs lateness, Event vs load time, Reconciliation tests, Periodic full refresh]
+
+check:
+- q: What does dbt build --select model+ build, and why is it what CI should run?
+  a: The edited model and everything downstream of it. Every dependant of the change gets rebuilt and tested, while unaffected models are skipped (with state:modified+ and --defer to production).
+- q: When is a view cheaper than a table?
+  a: When it's rarely queried. A view re-runs its SQL on every read; a table pays the build once per refresh and then queries are cheap. Frequent reads favour tables; frequent rebuilds with small changes favour incremental.
+- q: Why does an incremental model need a lookback window and a unique_key?
+  a: The lookback re-processes recent days to pick up late-arriving data; the unique_key makes that re-processing update rows instead of duplicating them.

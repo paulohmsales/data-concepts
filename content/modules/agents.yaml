@@ -123,3 +123,11 @@ interview:
     q: What safeguards would you put on an agent that can take actions in production systems?
     answer: Least-privilege credentials per tool; read-only by default, with human approval for irreversible or costly actions; idempotent tools with idempotency keys; step, time and spend limits; input/output validation and policy checks; treat tool and retrieved content as untrusted (prompt-injection defences); full audit logging of every call; and a kill switch. Evaluate on adversarial cases before launch.
     listen_for: [Least privilege, Human-in-the-loop for irreversible actions, Budgets, Prompt injection, Auditability]
+
+check:
+- q: If each step succeeds 95% of the time, how reliable is a 10-step agent?
+  a: 0.95¹⁰ ≈ 60%. Errors compound across steps, so long chains need very reliable steps, checks between them, or fewer steps.
+- q: What reduces compounding failure in an agent?
+  a: Fewer and better-specified steps, validation after each tool call (schemas, assertions), retries for transient errors, letting the agent detect and recover from failures, and human approval for irreversible actions.
+- q: Why log every tool call and its result?
+  a: To debug where chains fail, to evaluate step-level reliability, to replay incidents, and to audit actions with side effects.

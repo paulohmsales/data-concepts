@@ -95,3 +95,11 @@ interview:
     q: Your service’s p99 latency spikes every morning at 9 am although average CPU is only 60%. What’s happening and what do you do?
     answer: Averages hide the peak. At 9 am the arrival rate approaches capacity (or a dependency’s capacity, such as a DB pool or a downstream service), so queues form. Look at per-minute arrival rate, queue depth and pool waits. Fixes are autoscaling ahead of the peak or capacity for peak, pooled shared queues, smoothing scheduled work away from 9 am, bounding queues with fast rejection, timeouts and backpressure, and reducing per-request variance (caching, splitting heavy endpoints).
     listen_for: [Peak vs average, Finds the real bottleneck queue, Capacity, smoothing and backpressure options]
+
+check:
+- q: 'State Little''s law and use it: 200 requests/s at 50 ms each.'
+  a: L = λW. 200/s × 0.05 s = 10 requests in flight on average, which sizes concurrency (threads, connections) before adding headroom.
+- q: At 90% utilisation, how long is the wait relative to the service time (M/M/1)?
+  a: Wait ≈ ρ/(1 − ρ) × service time = 0.9/0.1 = 9× the service time. At 50% it is 1×, at 99% it is 99×.
+- q: Why does pooling servers into one queue help?
+  a: With one shared queue, no request waits while another server is idle. Separate queues per server waste capacity through bad luck, so pooled queues have much shorter waits at the same utilisation.

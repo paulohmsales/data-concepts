@@ -134,3 +134,13 @@ interview:
     q: Copy-on-write or merge-on-read for a table receiving frequent upserts from CDC?
     answer: Merge-on-read usually suits frequent small upserts, because writes are cheap and fast while readers merge delete files until compaction. Copy-on-write suits read-heavy tables with infrequent batch updates. Either way, cluster by the update key or time so changes touch few files, schedule compaction to fold deletes back in, and monitor read latency and write amplification.
     listen_for: [Write vs read cost trade-off, Update frequency and read patterns, Clustering to limit touched files, Compaction schedule]
+
+check:
+- q: What does Delta or Iceberg add to Parquet files?
+  a: 'A transaction log or metadata layer: atomic commits, consistent snapshots, time travel, schema evolution, row-level updates and per-file statistics for skipping files without listing storage.'
+- q: Why do minute-level commits slow every query, and what fixes it?
+  a: Each commit adds small files, and every query pays per-file overhead to open them. Compaction (OPTIMIZE, rewrite_data_files) rewrites them into large files.
+- q: Copy-on-write vs merge-on-read for frequent scattered updates?
+  a: Copy-on-write rewrites every touched file (huge write amplification). Merge-on-read writes small delete files, so writes are cheap but readers merge deletes until compaction folds them in.
+- q: What does vacuum retention trade?
+  a: Storage against time travel and safety. Old file versions stay until the retention expires; shorter retention saves storage but breaks queries and readers that need older versions.

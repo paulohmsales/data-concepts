@@ -125,3 +125,13 @@ interview:
     q: A downstream dependency has a 30-second outage and your service stays down for 10 minutes afterwards. What happened and how do you prevent it?
     answer: Likely a retry storm or a metastable failure. Retries and queued work built up during the outage; when the dependency came back, the backlog plus retries exceeded its capacity, so it failed again, triggering more retries. Prevent it with capped exponential backoff and jitter, retries at a single layer, retry budgets, circuit breakers, load shedding and timeouts shorter than the caller's, and drop work that is already too old to be useful rather than processing a stale backlog.
     listen_for: [Retry amplification, Backlog exceeds capacity, Circuit breakers or budgets, Load shedding, Drop stale work]
+
+check:
+- q: Describe a token bucket with rate r and burst b.
+  a: Tokens refill at r per second up to b; each request spends one. It allows bursts of up to b and a long-run rate of at most r. Requests with no token are rejected (429) or queued.
+- q: Why does retrying immediately make an outage worse?
+  a: Every failing client fires again at once, multiplying load (50× normal in the lab's outage) exactly when the server is struggling, which can keep it down after it recovers.
+- q: What does jitter add to exponential backoff?
+  a: Randomness, so clients that failed together don't retry together. Retries spread into a steady stream instead of synchronised waves, with fewer total attempts and faster completion.
+- q: Why retry at only one layer?
+  a: 'Retries multiply: 3 retries at each of 4 layers turns one failure into 3⁴ = 81 attempts at the bottom.'

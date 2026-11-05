@@ -94,3 +94,11 @@ interview:
     q: A vendor's bill has tripled as usage grew, and engineers propose replacing it with an in-house tool. What do you do?
     answer: Quantify both paths over 3 years with growth projections. Include the real build and maintenance cost and the migration risk, and stress-test estimates (build time often doubles). Explore cheaper middle options first, such as renegotiating, committing volume, reducing usage (sampling, retention, fewer events) or moving to an open-source managed alternative. If building still wins with margin under pessimistic assumptions, staff it properly, migrate incrementally, and set a checkpoint to stop if it overruns.
     listen_for: [Quantified comparison, Stress testing, Middle options and negotiation, Incremental migration with checkpoints]
+
+check:
+- q: What do build-vs-buy comparisons most often leave out?
+  a: Time to value (months of delay times value per month), ongoing maintenance, and the opportunity cost of the engineers, plus vendor usage growth on the buy side.
+- q: How do you stress-test a build case?
+  a: Double the build time, add 50% to maintenance and triple vendor usage. If the decision flips, the build case is fragile.
+- q: Which tools are usually better bought?
+  a: 'Commodity plumbing that doesn''t differentiate the business, such as schedulers, ingestion connectors, BI and catalogs. Build what makes you different: proprietary models, pricing logic, unique data products.'

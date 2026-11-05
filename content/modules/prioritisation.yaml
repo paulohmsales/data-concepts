@@ -88,3 +88,11 @@ interview:
     q: Your team has eight projects in flight and nothing is finishing. What do you do?
     answer: Limit work in progress. Pick the highest WSJF projects, pause the rest explicitly with stakeholders, and concentrate people so things finish. Explain that parallel work delays every delivery and adds switching costs, and show the value lost. Protect capacity for unplanned work, track throughput and cycle time, and only start something new when something finishes.
     listen_for: [WIP limits, Explicit pausing with stakeholders, Finish before starting, Measuring flow]
+
+check:
+- q: What is cost of delay?
+  a: The value per week a project would produce once live, which is lost for every week it waits.
+- q: How is WSJF computed, and why does it beat “highest value first”?
+  a: Cost of delay ÷ duration. Short valuable work starts earning immediately while long projects are built; ordering by value alone lets a long project block everything else.
+- q: Why does working on four projects at once deliver less?
+  a: Each project gets a quarter of the team, so every one finishes later and nothing earns value early. Context switching adds more loss on top.

@@ -282,41 +282,65 @@ by role demand:
 
 ## 13. Module template v2
 
-1. **Header:** track, title, one-line promise, roles it matters for, time.
-2. **Lab first:** the interactive experiment fills the page width under the header, with its controls
-   beside the charts, inside the lab. Below it, **experiments**: numbered challenges, each with a “set it
-   up” button that configures the lab, what to look for, and why it happens.
-3. **Understand:** a short intuition, then the **deep dive**: the mechanism step by step, the maths or
-   algorithm, a worked example with numbers, edge cases, how it shows up in production, related modules.
-4. **Interview:** real-style questions with a model answer, the follow-ups interviewers ask, and what a
-   strong answer includes.
-5. **Check yourself:** the explain-back questions (optional).
+1. **Header:** track, title, one-line promise, roles it matters for, progress.
+2. **Understand first** (changed 2026-11-05 after review: “the explanation should be the first item”):
+   the plain-language intuition.
+3. **Lab:** the interactive experiment at full width, controls in a sticky rail beside it. Below it,
+   **experiments**: numbered challenges, each with a “set it up” button that configures the lab, what to
+   look for, and why it happens.
+4. **Deep dive:** the mechanism step by step, the maths or algorithm, worked numbers, edge cases, how it
+   shows up in production, related modules.
+5. **Interview:** real-style questions with a model answer and what a strong answer includes.
+6. **Check yourself:** short questions with reference answers.
 
 Navigation: a persistent sidebar with tracks and modules (search, current module highlighted), a top
 bar (search, roles, integrations, theme), breadcrumbs and previous/next at the end of each module.
 
-## 14. Integrations: a lab API with real accounts
+## 14. Integrations: a lab API with real accounts (as built)
 
-- **Shape:** a small FastAPI service on the VPS (`lab-api`, Docker Swarm, behind Traefik and the same
-  login, `/api`). Credentials live only on the server as Swarm secrets; the browser never sees them.
-- **Providers:** BigQuery (service account limited to one sandbox dataset; `maximum_bytes_billed` on
-  every job), Snowflake (role limited to one database; X-Small warehouse, auto-suspend 60 s, resource
-  monitor with a credit quota), AWS (IAM user limited to one S3 bucket, one Athena workgroup with a
-  bytes-scanned limit, one Glue database), Databricks (Free Edition SQL warehouse via the Statement
-  Execution API).
-- **Safety:** per-call timeouts and row limits, per-provider daily budget, an audit log of every
-  statement, a kill switch, read-only by default with write labs confined to sandbox objects.
-- **Labs:** same query on four engines (bytes scanned, time, cost); load a file (object store → table)
-  three ways; MERGE and SCD2 on each warehouse; partitioning/clustering and the bill; time travel and
-  zero-copy clones; external tables over S3/GCS.
-- **Needed from you:** the accounts exist; I prepare least-privilege setup steps per provider and you
-  create the keys (I don't create cloud accounts or keys myself).
+- **Shape:** part of the FastAPI service on the VPS (`/api/integrations/...`, behind Traefik and the same
+  login). Credentials are JSON files in `/opt/data-concepts/secrets` (root-only), bind-mounted read-only
+  into the API container and read on each request, so adding or rotating a key needs no redeploy.
+  (Swarm secrets were the first idea; they are immutable and would make every provider mandatory.)
+  `deploy/set-integration.sh` writes them over SSH from your machine and runs a test query.
+- **Adapters:** BigQuery (jobs REST API, service-account JWT; dry runs supported), Snowflake (SQL API v2
+  with key-pair JWT; pruning stats from query history), Databricks (Statement Execution API; PAT or
+  OAuth M2M), Athena (boto3). Plain HTTPS everywhere except Athena.
+- **Safety:** least-privilege keys from the guides; provider-side caps (maximum bytes billed, resource
+  monitor, workgroup scan limit, auto-stop); app limits per provider per day (200 queries, 20 GB),
+  60 s timeout, 500 rows, one statement per request; every run logged with bytes, cost and outcome.
+- **Labs (built, read-only):** BigQuery: LIMIT doesn't cut cost, column pruning, result cache,
+  _TABLE_SUFFIX. Snowflake: metadata answers, micro-partition pruning, result cache. Athena: NOAA
+  weather data as partitioned Parquet vs CSV (the CSV query hits the 1 GB limit). Databricks: Delta
+  table detail, join plans.
+- **Labs (next, need sandbox writes):** time travel and zero-copy clones, MERGE/SCD2 on each warehouse,
+  clustering and the bill, CTAS from CSV to Parquet, OPTIMIZE and Z-order. Build after real keys are
+  connected so each can be verified end to end.
 
 ## 15. Milestones v2
 
 | # | Milestone | Done when | Status |
 |---|---|---|---|
-| M7 | Shell, navigation, design system, lab-first template; roles page; two pilot modules with full depth | Deployed; you review the pilots | in progress |
-| M8 | Deep dive + interview sections for all 24 modules | Every module has template v2 | |
-| M9 | New topics (§12): AE modelling/dbt/quality, DE design/orchestration/streaming/Spark/lakehouse/CDC, AI/LLM track, SWE track, leadership track | Built, tested, deployed | |
-| M10 | Lab API + provider adapters + first four integration labs | Real queries run on all four providers under budget caps | |
+| M7 | Shell, navigation, design system, module template; roles page; cloud platforms page | Deployed | done |
+| M8 | Deep dive + interview + checks for all original 24 modules | Every module has template v2 | done |
+| M9 | New topics (§12) | Built, tested, deployed | done: 24 new modules (48 total), see §16 |
+| M10 | Lab API + provider adapters + first integration labs | Real queries run on all four providers under budget caps | built and deployed; waiting for keys to verify end to end |
+| M11 | Integration labs that write to sandboxes | Each verified on a real account | next |
+
+## 16. Status (2026-11-05)
+
+Built from §12: dimensional modelling, dbt in practice, data quality and contracts (AE); surge-pricing
+system design, orchestration and backfills, Kafka and consumer lag, Spark joins and skew, lakehouse
+tables (DE); KPI trees (DA); difference-in-differences, switchback experiments (experimentation); drift
+monitoring (ML); RAG, embeddings, LLM evals, agents, LLM cost and latency (AI); queues, tail latency,
+caching, rate limiting and retries (SWE); SLOs and error budgets, prioritisation with cost of delay,
+build vs buy (leadership). Progress tracking per login was added along the way.
+
+Dropped: a separate sequential-testing module (the A/B testing module already covers peeking and group
+sequential boundaries).
+
+Not built yet (candidate backlog): CDC and API ingestion patterns, FinOps; SQL patterns (gaps and
+islands, sessionisation), forecasting; synthetic control and regression discontinuity labs; Bayesian
+A/B and novelty effects; time-series cross-validation, calibration, feature stores; structured output,
+guardrails and prompt injection, prompt vs RAG vs fine-tune; indexes and query plans, replication and
+consistency; incident management, team topologies, governance and PII.

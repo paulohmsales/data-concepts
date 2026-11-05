@@ -111,3 +111,11 @@ interview:
     q: You cache LLM responses for a support bot. What are the pitfalls?
     answer: Hit rates depend on how repetitive questions are (normalise text, or use semantic caching with embeddings and a strict similarity threshold); answers can depend on user context or permissions (include them in the key, or don’t cache personalised answers); underlying documents change (invalidate when the knowledge base updates, plus TTL); and wrong cached answers are served repeatedly (allow feedback to evict). Measure quality on cached responses, not just hit rate.
     listen_for: [Key design includes context, Semantic caching thresholds, Invalidation on content change, Quality monitoring]
+
+check:
+- q: Why can a cache holding 1% of keys serve about half the traffic?
+  a: 'Real traffic is skewed (roughly Zipf): a few keys get most requests. Keeping those in memory serves a large share. With flat popularity, small caches help little.'
+- q: With a TTL of T and updates at rate u, what drives the stale-read share?
+  a: uT, the expected number of updates within one TTL. Stale share = 1 − (1 − e^(−uT))/(uT), so long TTLs on frequently changing data serve mostly stale values. Shorten the TTL or delete on write.
+- q: What is a cache stampede, and two ways to prevent it?
+  a: Many requests miss on the same hot key at once (expiry or a flush) and all hit the database. Prevent it with TTL jitter and request coalescing (single-flight), or serve stale while one request refreshes.

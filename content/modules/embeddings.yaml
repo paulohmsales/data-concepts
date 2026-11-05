@@ -106,3 +106,11 @@ interview:
     q: How would you choose a vector index for 200 million vectors with tenant filters and a 50 ms p99 budget?
     answer: Probably HNSW or IVF-PQ in a vector database that supports filtering inside the search (per-tenant partitions or filtered HNSW), with quantisation to fit memory and exact re-scoring of the top candidates. Tune efSearch/nprobe against measured recall@k on real queries and the latency budget, shard by tenant or by vector space, and plan for re-indexing when the embedding model changes.
     listen_for: [Index type with reasons, Filtering inside search, Memory via quantisation, Measured recall/latency tuning, Model change and re-indexing]
+
+check:
+- q: Cosine similarity or dot product, and when do they agree?
+  a: Cosine compares direction only; the dot product also grows with vector length. For normalised vectors they are identical. Use what the embedding model was trained with, usually cosine on normalised vectors.
+- q: What does nprobe trade in an IVF index?
+  a: How many clusters are searched. More probes scan more vectors (slower) but find more true neighbours (higher recall). Recall climbs fast then flattens, so pick the knee for your latency budget.
+- q: Why add keyword search to semantic search?
+  a: Embeddings blur exact tokens such as product codes, names and numbers. Hybrid search (BM25 plus vectors, fused by rank) catches what each misses.
