@@ -1,0 +1,90 @@
+slug: prioritisation
+title: Prioritising with cost of delay
+track: data-leadership
+summary: why the order of work matters as much as the work, WSJF (cost of delay ÷ duration), and how running many projects at once quietly loses value.
+roles: [mgr, ae, de, da]
+lab: prioritisation
+order: 2
+
+intuition: |
+  A data team's backlog always holds more good ideas than time. Each project is worth something **per week** once it's live: revenue it protects, hours it saves, decisions it improves. Every week it waits, that value is lost for good. That weekly value is the project's **cost of delay**.
+
+  Once you think in cost of delay, two things follow:
+
+  - **Order matters.** With the same team and the same projects, finishing small, valuable things first delivers far more over a year than starting with the big bet. The rule that maximises value is **WSJF** (weighted shortest job first): cost of delay ÷ duration, highest first.
+  - **Parallel work is expensive.** Splitting a team across four projects doesn't make anything faster. It makes everything finish later, and context switching makes it slower still.
+
+  The lab uses an 8-project backlog worth up to $45k/week in total, built by one team over a year.
+
+experiments:
+  - title: As requested
+    goal: Work in the order requests arrived, one project at a time.
+    setup: {order: requested, wip: 1}
+    look: The experimentation platform takes 16 weeks before anything ships, and about $820k of value is delivered by year end.
+    why: |
+      The first item happened to be the biggest. Everything else waits behind it, including a 1-week warehouse clean-up worth $4k a week.
+  - title: Biggest value first
+    goal: Order by cost of delay alone.
+    setup: {order: value, wip: 1}
+    look: About $920k. Better, but the experimentation platform still goes first because it has the highest weekly value.
+    why: |
+      Value per week ignores how long a project blocks the team. A $10k/week project that takes 16 weeks delays seven others.
+  - title: WSJF
+    goal: Order by cost of delay ÷ duration.
+    setup: {order: wsjf, wip: 1}
+    look: About $1.36M, two-thirds more than "as requested". The clean-up ships in week 1, the dashboard in week 3, and the reconciliation fix in week 6.
+    why: |
+      Short, valuable work starts earning immediately and keeps earning while the big projects are built. The team finishes everything in the same 51 weeks either way; only the order changed.
+  - title: Everyone on everything
+    goal: WSJF order, but 4 projects in flight at once.
+    setup: {order: wsjf, wip: 4}
+    look: Value drops to about $550k. Nothing ships until week 7, and the last project slips past the end of the year.
+    why: |
+      With 4 in flight, each project gets a quarter of the team, so even the 1-week clean-up takes 4+ weeks. Context switching (15% per extra project here) takes another bite. "Limit work in progress" is the cheapest productivity gain there is.
+  - title: No switching cost, still worse
+    goal: 4 in flight, context-switching cost 0.
+    setup: {order: wsjf, wip: 4, switchCost: 0}
+    look: Still well below one-at-a-time.
+    why: |
+      Even with perfectly efficient multitasking, parallel work delays the first deliveries, and every week of delay costs value. Finishing beats starting.
+
+deep_dive:
+  - type: heading
+    text: Estimating cost of delay
+  - type: steps
+    items:
+      - title: Name the value type
+        md: "Increases revenue, protects revenue (a churn model), reduces cost (warehouse clean-up), avoids risk (finance reconciliation before an audit), or creates options (a platform that enables future work)."
+      - title: Put a rough number per week
+        md: Order of magnitude is enough ($1k, $5k, $20k a week). The point is comparing projects with the same rough ruler, not precision. Ask the stakeholder what they'd lose if it shipped a month later.
+      - title: Check urgency
+        md: Some value expires, like a model needed before Black Friday or a regulatory deadline. After the date the cost of delay jumps or the value disappears. Those go first or not at all.
+      - title: Estimate duration honestly
+        md: Include data access, review and rollout, not only the build. When in doubt, split the project. A smaller first slice usually has a much higher WSJF.
+  - type: formula
+    text: "WSJF = cost of delay per week ÷ duration in weeks        value lost by waiting = cost of delay × weeks of delay"
+  - type: table
+    columns:
+      - {key: m, label: Method}
+      - {key: good, label: Good for}
+      - {key: watch, label: Watch out}
+    rows:
+      - {m: "Cost of delay / WSJF", good: "Ordering a backlog by economic impact", watch: "Needs rough value estimates; garbage in, garbage out"}
+      - {m: "RICE (reach × impact × confidence ÷ effort)", good: "Product features with many users", watch: "Scores can be gamed; still needs a duration-like denominator"}
+      - {m: "MoSCoW (must/should/could/won't)", good: "Scoping a single release", watch: "Everything becomes a must"}
+      - {m: "Value vs effort 2×2", good: "Workshops, quick triage", watch: "Loses ordering inside each box"}
+  - type: callout
+    kind: prod
+    md: "For data teams, a large share of work is unplanned: incidents, ad-hoc questions, upstream breakages. Reserve explicit capacity for it (e.g. one person on rotation), track how much it really takes, and keep planned WIP low so the plan survives contact with reality. Publish the ordered backlog with rough cost-of-delay numbers. Most prioritisation arguments end when people see the numbers side by side."
+  - type: related
+    slugs: [slos, queues, orchestration]
+
+interview:
+  - level: mid
+    q: Three stakeholders each say their request is the top priority. How do you decide?
+    answer: Make the trade-off explicit. For each request, estimate the value per week of having it (or the cost of not having it), any deadline, and the effort. Order by value per unit of effort (WSJF), adjusted for hard deadlines, share the reasoning openly, and look for smaller first slices that deliver most of the value sooner. Escalate genuine conflicts to whoever owns the shared goal, with the numbers.
+    listen_for: [Cost of delay framing, Effort and deadlines, Transparent reasoning, Slicing, Escalation with data]
+  - level: senior
+    q: Your team has eight projects in flight and nothing is finishing. What do you do?
+    answer: Limit work in progress. Pick the highest WSJF projects, pause the rest explicitly with stakeholders, and concentrate people so things finish. Explain that parallel work delays every delivery and adds switching costs, and show the value lost. Protect capacity for unplanned work, track throughput and cycle time, and only start something new when something finishes.
+    listen_for: [WIP limits, Explicit pausing with stakeholders, Finish before starting, Measuring flow]
