@@ -144,7 +144,7 @@ export default function Retries() {
             ]}
           />
           <p className="try">
-            Try: set acks lost to 0%. Retrying + INSERT looks perfect, until the network has a bad day.
+            Set acks lost to 0%. Retrying + INSERT looks perfect, until the network has a bad day.
             Then set requests lost to 0% and acks lost high: “send once” looks lossless but quietly
             depends on luck.
           </p>

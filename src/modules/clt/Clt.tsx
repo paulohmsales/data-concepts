@@ -183,7 +183,7 @@ export default function Clt() {
           </StatRow>
           <PlotFigure build={buildMeans} label="Histogram of sample means with the predicted normal curve" />
           <p className="try">
-            Try: start at n = 1 (the means chart is just the population), then drag n up. Watch the
+            Start at n = 1 (the means chart is just the population), then drag n up. Watch the
             bell appear and narrow. Quadruple n and the SD of the means halves.
           </p>
         </div>
@@ -228,7 +228,7 @@ export default function Clt() {
             ]}
           />
           <p className="try">
-            Try: “Rare event (5% yes)” at n = 30 with zoom on. The means are lumpy and lean right. To
+            “Rare event (5% yes)” at n = 30 with zoom on. The means are lumpy and lean right. To
             get the skew of the mean below 0.25 you need n ≈ (4.1 / 0.25)² ≈ {int(Math.ceil((DISTS.rare.skew / 0.25) ** 2))}.
             That is why conversion-rate tests need large samples beyond power alone. A {pct(0.05, 0)}{' '}
             rate with n = 30 means you expect 1.5 conversions.

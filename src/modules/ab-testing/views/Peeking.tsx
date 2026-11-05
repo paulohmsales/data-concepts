@@ -48,7 +48,7 @@ export default function Peeking({ sim }: { sim: Simulation }) {
 
   return (
     <>
-      <h3>Break it, part 1: peeking</h3>
+      <h3>Peeking</h3>
       <p className="lede">
         Now imagine checking the dashboard {params.looks} times during the test and stopping the first time
         p dips below α. Each line is one experiment ({Math.min(SHOWN, peeks.length)} of {int(peeks.length)} shown).

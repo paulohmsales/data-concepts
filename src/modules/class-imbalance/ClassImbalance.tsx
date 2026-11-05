@@ -167,7 +167,7 @@ export default function ClassImbalance() {
           />
           <PlotFigure build={buildProb} label="Predicted probability by feature value for each model" />
           <p className="try">
-            Try: the plain model (blue) follows the true probability closely, which is good, but rarely reaches 0.5,
+            The plain model (blue) follows the true probability closely, which is good, but rarely reaches 0.5,
             so at the default threshold it flags almost nothing. Lower its threshold to about 0.1 and recall jumps,
             no resampling needed. The weighted model (orange) gets there by inflating every probability.
           </p>

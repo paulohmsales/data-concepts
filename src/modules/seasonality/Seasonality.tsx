@@ -185,7 +185,7 @@ export default function Seasonality() {
             <PlotFigure build={buildWeekly} label="Estimated versus true weekly pattern" />
           </div>
           <p className="try">
-            Try: set the window to 7, then 10. The 7-day line is smooth; the 10-day line wobbles every week.
+            Set the window to 7, then 10. The 7-day line is smooth; the 10-day line wobbles every week.
             Raise the yearly season and the 7-day line follows it, because a weekly average only removes the
             weekly cycle. The 365-day average removes both, but it can’t see the first and last half-year.
           </p>

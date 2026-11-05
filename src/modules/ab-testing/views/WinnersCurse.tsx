@@ -46,7 +46,7 @@ export default function WinnersCurse({ sim }: { sim: Simulation }) {
 
   return (
     <>
-      <h3>Break it, part 2: the winner’s curse</h3>
+      <h3>The winner’s curse</h3>
       <p className="lede">
         Each test estimates the lift with noise. When power is low, only the tests that got lucky
         and overshot clear the significance bar, so “the winners” overstate the truth.

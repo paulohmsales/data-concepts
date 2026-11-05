@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useTheme } from '../lib/theme.ts'
 
 /**
  * Chart colors (dataviz reference palette). Plot writes colors into SVG attributes, where CSS
@@ -18,7 +18,7 @@ export interface VizTheme {
 }
 
 const LIGHT: VizTheme = {
-  surface: '#fcfcfb',
+  surface: '#ffffff',
   ink: '#0b0b0b',
   inkSecondary: '#52514e',
   muted: '#898781',
@@ -31,7 +31,7 @@ const LIGHT: VizTheme = {
 }
 
 const DARK: VizTheme = {
-  surface: '#1a1a19',
+  surface: '#181817',
   ink: '#f0efec',
   inkSecondary: '#c3c2b7',
   muted: '#898781',
@@ -43,15 +43,6 @@ const DARK: VizTheme = {
   neutral: '#52514e',
 }
 
-const query = '(prefers-color-scheme: dark)'
-
 export function useVizTheme(): VizTheme {
-  const [dark, setDark] = useState(() => window.matchMedia(query).matches)
-  useEffect(() => {
-    const m = window.matchMedia(query)
-    const onChange = (e: MediaQueryListEvent) => setDark(e.matches)
-    m.addEventListener('change', onChange)
-    return () => m.removeEventListener('change', onChange)
-  }, [])
-  return dark ? DARK : LIGHT
+  return useTheme() === 'dark' ? DARK : LIGHT
 }

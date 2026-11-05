@@ -150,7 +150,7 @@ export default function Funnels() {
           </p>
           <PlotFigure build={buildWindows} label="Purchasers counted by conversion window" />
           <p className="try">
-            Try: set the window to 1 hour, and “buyers who come back later” to 80%. Most purchases fall outside,
+            Set the window to 1 hour, and “buyers who come back later” to 80%. Most purchases fall outside,
             and cart → purchase looks like a disaster. Same users, different definition.
           </p>
         </div>

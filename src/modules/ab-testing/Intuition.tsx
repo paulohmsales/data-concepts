@@ -22,7 +22,7 @@ export default function Intuition() {
       </p>
       <p>
         Two habits break the whole system: <b>peeking</b> (checking repeatedly and stopping at the
-        first good-looking result) and <b>trusting underpowered winners</b>. Section 3 lets you do both.
+        first good-looking result) and <b>trusting underpowered winners</b>. The experiments above let you do both.
       </p>
     </>
   )

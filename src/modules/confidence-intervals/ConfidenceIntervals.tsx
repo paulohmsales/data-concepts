@@ -147,7 +147,7 @@ export default function ConfidenceIntervals() {
           </StatRow>
           <PlotFigure build={buildIntervals} label="One hundred confidence intervals, misses in red" />
           <p className="try">
-            Try: raise the level to 99%. Fewer misses, but every interval gets wider. Then multiply n by
+            Raise the level to 99%. Fewer misses, but every interval gets wider. Then multiply n by
             4 and watch the width halve. Confidence and precision trade against each other; only more
             data buys both.
           </p>

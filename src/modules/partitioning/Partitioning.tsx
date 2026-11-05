@@ -150,7 +150,7 @@ export default function Partitioning() {
             ]}
           />
           <p className="try">
-            Try: “Last 7 days” by day reads 7 partitions; by month it reads all of March. Then pick “One
+            “Last 7 days” by day reads 7 partitions; by month it reads all of March. Then pick “One
             user’s history”: date partitions can’t help at all, and user_id partitions win. Layout is a bet on
             which queries matter.
           </p>

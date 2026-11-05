@@ -1,0 +1,302 @@
+.page {
+  max-width: 1180px;
+}
+
+/* ---------- home ---------- */
+.hero {
+  padding: 2.5rem 2.25rem;
+  border-radius: calc(var(--radius) * 1.4);
+  background:
+    radial-gradient(circle at 85% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+    var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+}
+
+.hero h1 {
+  font-size: 2.4rem;
+  max-width: 22ch;
+}
+
+.hero > p {
+  font-size: 1.1rem;
+  max-width: 62ch;
+}
+
+.heroStats {
+  display: flex;
+  gap: 2rem;
+  margin: 1.25rem 0;
+  color: var(--muted);
+}
+
+.heroStats strong {
+  font-size: 1.6rem;
+  color: var(--fg);
+  margin-right: 0.3rem;
+}
+
+.heroActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primary,
+.secondary {
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.secondary {
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+}
+
+.how {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.how > div {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.how p {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+}
+
+.trackGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
+
+.trackCard {
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.trackCard h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.2rem;
+}
+
+.trackBlurb {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 0.8rem;
+}
+
+.trackCard ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.trackCard li {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.trackCard li a {
+  font-weight: 600;
+  display: block;
+}
+
+.trackCard li span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.planned {
+  background: transparent;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  vertical-align: middle;
+}
+
+.roleStrip {
+  margin-top: 2rem;
+}
+
+.roleStrip > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.roleStrip a,
+.roleTabs a {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--fg-2);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.roleStrip a:hover,
+.roleTabs a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- roles ---------- */
+.roleTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.roleSection {
+  scroll-margin-top: calc(var(--topbar-h) + 16px);
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.roleWhat {
+  font-size: 1.02rem;
+}
+
+.roleGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.modList,
+.plannedList {
+  padding-left: 1.1rem;
+  margin: 0.2rem 0 1rem;
+}
+
+.plannedList li {
+  color: var(--muted);
+}
+
+.ladder {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.ladder ol,
+.ladder ul {
+  padding-left: 1.1rem;
+  margin: 0.2rem 0;
+  font-size: 0.92rem;
+}
+
+/* ---------- integrations ---------- */
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.provider {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.providerHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.providerHead h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.provider small {
+  color: var(--muted);
+}
+
+.provider p {
+  font-size: 0.9rem;
+}
+
+.provider ul {
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+
+.status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.howList li {
+  margin-bottom: 0.4rem;
+}
+
+@media (max-width: 900px) {
+  .roleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    font-size: 1.8rem;
+  }
+}

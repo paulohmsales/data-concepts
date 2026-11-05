@@ -6,6 +6,8 @@ import ExplainBack from './ExplainBack.tsx'
 import Intuition from './Intuition.tsx'
 import type { View } from './sandbox.ts'
 import { scenarios, type Scenario } from './scenarios.ts'
+import DeepDive from './DeepDive.tsx'
+import InterviewQs from './InterviewQs.tsx'
 import SourceTable from './SourceTable.tsx'
 import SqlLog from './SqlLog.tsx'
 import TargetTable from './TargetTable.tsx'
@@ -171,6 +173,8 @@ export default function Snapshots() {
       intuition={<Intuition />}
       play={play}
       breakIt={breakIt}
+      deepDive={<DeepDive />}
+      interview={<InterviewQs />}
       explainBack={<ExplainBack />}
     />
   )

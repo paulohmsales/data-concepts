@@ -123,7 +123,7 @@ export default function Srm() {
           </StatRow>
           <PlotFigure build={buildCurve} label="SRM p-value against observed share at the current sample size" />
           <p className="try">
-            Try: keep 50.3% in B and drag the users up. At 10,000 it is noise; at 1,000,000 it is an
+            Keep 50.3% in B and drag the users up. At 10,000 it is noise; at 1,000,000 it is an
             alarm. The bigger the experiment, the smaller the imbalance needed to prove something is
             broken. People get this backwards: “it’s only 0.3%” is no comfort at a million users.
           </p>
@@ -156,7 +156,7 @@ export default function Srm() {
             <Stat label={`Over ${leak.runs} reruns`} value={`${pct(leak.wins, 0)} “B wins”`} note={`SRM flagged ${pct(leak.flagged, 0)} of them`} />
           </StatRow>
           <p className="try">
-            Try: set the loss to 0%: “B wins” falls to a few percent (about α/2, the one-sided false
+            Set the loss to 0%: “B wins” falls to a few percent (about α/2, the one-sided false
             positives) and SRM stays quiet. At 5% the fake win shows up in about a quarter of reruns, but
             SRM already flags three in four; by 15% the fake win is near certain and SRM flags every
             run. The check fails loudly exactly when the metric is lying.

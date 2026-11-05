@@ -152,7 +152,7 @@ export default function Cohorts() {
           </StatRow>
           <PlotFigure build={buildHeat} label="Cohort retention triangle" />
           <p className="try">
-            Try: the bottom-left is your newest cohort, with only a week of history. Move “users who stick” and watch
+            The bottom-left is your newest cohort, with only a week of history. Move “users who stick” and watch
             the right-hand columns flatten out at that level: that plateau, not week 1, decides whether
             the product grows.
           </p>

@@ -200,3 +200,123 @@ data-concepts/
 | – | Code splitting | Each module is a lazy route; DuckDB loads only on module 2 | Home and A/B stay ~85 kB gzipped; DuckDB WASM is ~8 MB | 2026-11-04 ✅ |
 | – | Explain-back | Optional: reference answers on each page; notes/ answers not required | Your call | 2026-11-05 ✅ |
 | – | SQL modules | Shared SqlLab on DuckDB-WASM, one schema per module; same SQL tested natively | Real SQL to edit, no backend | 2026-11-05 ✅ |
+
+---
+
+# v2 (2026-11-05): depth, lab-first, more roles, real integrations
+
+Feedback: navigation and UI are poor; intuition is shallow, so add depth; the experiment should be the
+centre of each module; broaden topics (AI/LLM, software engineering, management); add integrations with
+real tools (GCP, Snowflake, AWS, Databricks).
+
+## 11. What the market asks for (jobz, 2026-11-05)
+
+Share of job posts mentioning each item, by title family (jobz `jobs` table, posts with a description;
+aggregate counts only). n: DA 2,952 · AE 515 · DE 2,688 · DS 1,203 · MLE 873 · AI/LLM 1,042 · SWE 16,000 ·
+data manager/lead 3,328.
+
+| Skill | DA | AE | DE | DS | MLE | AI | SWE | Mgr |
+|---|---|---|---|---|---|---|---|---|
+| SQL | 70 | 93 | 80 | 68 | 20 | 19 | 21 | 32 |
+| Python | 43 | 70 | 77 | 85 | 68 | 73 | 46 | 27 |
+| Data modelling | 24 | **76** | 54 | 10 | 1 | 9 | 11 | 14 |
+| dbt | 13 | **71** | 35 | 11 | 4 | 2 | 1 | 8 |
+| Data quality / contracts | 35 | 56 | 54 | 14 | 22 | 38 | 27 | 28 |
+| Governance / lineage | 22 | 40 | 44 | 13 | 11 | 20 | 8 | 35 |
+| System design | 19 | 53 | **65** | 30 | 58 | 51 | 61 | 37 |
+| Batch / ETL | 12 | 36 | 54 | 6 | 3 | 4 | 3 | 8 |
+| Streaming | 6 | 9 | 33 | 17 | 28 | 23 | 22 | 14 |
+| Spark / Databricks | 5/9 | 14/28 | 43/41 | 19/16 | 19/9 | 4/8 | 5/2 | 6/9 |
+| Snowflake / BigQuery | 12/8 | 51/35 | 35/17 | 12/8 | 4/2 | 6/4 | 3/2 | 12/5 |
+| AWS / GCP / Azure | 7/5/8 | 17/15/12 | 51/30/36 | 21/15/13 | 35/21/20 | 39/25/27 | 40/17/16 | 14/9/10 |
+| Airflow / Dagster | 3/0 | 35/10 | 34/9 | 7/1 | 12/0 | 3/0 | 2/0 | 5/1 |
+| CI/CD | 2 | 21 | 39 | 9 | 20 | 32 | 30 | 8 |
+| Statistics / A/B | 39/16 | 10/10 | 5/4 | 66/40 | 23/27 | 4/14 | 2/7 | 15/15 |
+| BI (Power BI / Tableau / Looker) | 35/32/17 | 23/25/28 | 11/7/5 | 8/11/7 | – | – | – | 10/12/6 |
+| LLM / RAG / agents / evals | 9/1/12/9 | 20/3/28/9 | 17/8/19/6 | 34/14/29/30 | 54/30/38/52 | **80/50/76/55** | 20/6/30/12 | 29/10/38/22 |
+| APIs | 35 | 42 | 51 | 43 | 44 | 67 | **71** | 42 |
+| Stakeholders / strategy / roadmap | 64/46/10 | 59/29/13 | 42/25/7 | 52/45/18 | 20/34/23 | 31/33/16 | 21/20/14 | 59/**71**/43 |
+
+Interview themes (prep sites and posted loops; directional): DE system design with trade-offs and
+failure handling (real-time clickstream, surge pricing: freshness over consistency), incremental loads
+without CDC columns, SCD2 on a full daily extract, medallion layers mixing Kafka and batch, slow/costly
+joins and skew in Spark/Databricks, streaming checkpoints, deployment across environments, 10,000 API
+calls from Python; AE: incremental vs full refresh, materializations, snapshots, tests failing, metric
+usefulness; AI engineering: RAG chunking/retrieval, model vs system evals, agents vs chains, cost,
+latency, hallucination, prompt vs fine-tune; managers: strategy, quality across pipelines, compliance,
+leading projects end to end.
+
+## 12. Gaps, and the new topics
+
+Current 24 modules cover statistics, experimentation, a slice of AE/DE, analysis and classic ML. Missing,
+by role demand:
+
+- **Analytics engineering:** dimensional modelling (facts, dimensions, conformed dims, SCD 1/2/3/6);
+  dbt in practice (DAG, ref, materializations, incremental strategies, tests, snapshots, CI slim builds);
+  data quality, contracts and observability; semantic layer / one definition of a metric.
+- **Data engineering:** DE system design (an interactive design board: requirements → components →
+  failure injection; surge pricing, clickstream, CDC to lakehouse); orchestration (DAGs, backfills,
+  catch-up, retries, SLAs); streaming internals (Kafka partitions, ordering, consumer lag, offsets,
+  checkpoints, exactly-once); Spark execution (shuffle, broadcast vs sort-merge join, skew, AQE, file
+  sizes); lakehouse formats (Delta/Iceberg: ACID, time travel, MERGE, compaction, vacuum) and medallion;
+  CDC (log vs query based, no-change-column diffing); ingestion from APIs (concurrency, rate limits,
+  backoff, pagination); cost and FinOps.
+- **Data analysis:** KPI design and metric trees; causal inference without an experiment (DiD, synthetic
+  control, regression discontinuity, matching); SQL patterns (gaps and islands, sessionisation); forecasting.
+- **Experimentation:** sequential testing (the fix for peeking), interference and switchback tests (surge
+  pricing again), novelty effects, Bayesian A/B.
+- **ML:** model monitoring and drift; time-series cross-validation; calibration; feature stores.
+- **AI / LLM engineering (new track):** tokens, context, cost and latency; embeddings and vector search;
+  RAG (chunking, retrieval, reranking, failure modes); evals (golden sets, LLM-as-judge, system vs model
+  evals); agents and tool use (loops, budgets, failure); structured output and prompting; guardrails and
+  prompt injection; prompt vs RAG vs fine-tune.
+- **Software engineering (new track):** rate limiting and retries with backoff and jitter (the 10,000
+  API calls); caching (hit rate, TTL, invalidation, stampedes); queues and backpressure (Little's law,
+  utilisation and latency); indexes and query plans; replication and consistency; tail latency (p99,
+  fan-out).
+- **Data leadership (new track):** prioritisation (cost of delay, WSJF); SLAs, SLOs and error budgets for
+  data; incident management and postmortems; team topologies (central, embedded, hub and spoke); build
+  vs buy; governance and PII. Each gets a simulator, not just prose.
+- **Roles page:** for each role (DA, AE, DE, DS, MLE, AI, SWE; IC and manager paths) the demand table
+  above, the modules that cover it, and an interview checklist.
+
+## 13. Module template v2
+
+1. **Header:** track, title, one-line promise, roles it matters for, time.
+2. **Lab first:** the interactive experiment fills the page width under the header, with its controls
+   beside the charts, inside the lab. Below it, **experiments**: numbered challenges, each with a “set it
+   up” button that configures the lab, what to look for, and why it happens.
+3. **Understand:** a short intuition, then the **deep dive**: the mechanism step by step, the maths or
+   algorithm, a worked example with numbers, edge cases, how it shows up in production, related modules.
+4. **Interview:** real-style questions with a model answer, the follow-ups interviewers ask, and what a
+   strong answer includes.
+5. **Check yourself:** the explain-back questions (optional).
+
+Navigation: a persistent sidebar with tracks and modules (search, current module highlighted), a top
+bar (search, roles, integrations, theme), breadcrumbs and previous/next at the end of each module.
+
+## 14. Integrations: a lab API with real accounts
+
+- **Shape:** a small FastAPI service on the VPS (`lab-api`, Docker Swarm, behind Traefik and the same
+  login, `/api`). Credentials live only on the server as Swarm secrets; the browser never sees them.
+- **Providers:** BigQuery (service account limited to one sandbox dataset; `maximum_bytes_billed` on
+  every job), Snowflake (role limited to one database; X-Small warehouse, auto-suspend 60 s, resource
+  monitor with a credit quota), AWS (IAM user limited to one S3 bucket, one Athena workgroup with a
+  bytes-scanned limit, one Glue database), Databricks (Free Edition SQL warehouse via the Statement
+  Execution API).
+- **Safety:** per-call timeouts and row limits, per-provider daily budget, an audit log of every
+  statement, a kill switch, read-only by default with write labs confined to sandbox objects.
+- **Labs:** same query on four engines (bytes scanned, time, cost); load a file (object store → table)
+  three ways; MERGE and SCD2 on each warehouse; partitioning/clustering and the bill; time travel and
+  zero-copy clones; external tables over S3/GCS.
+- **Needed from you:** the accounts exist; I prepare least-privilege setup steps per provider and you
+  create the keys (I don't create cloud accounts or keys myself).
+
+## 15. Milestones v2
+
+| # | Milestone | Done when | Status |
+|---|---|---|---|
+| M7 | Shell, navigation, design system, lab-first template; roles page; two pilot modules with full depth | Deployed; you review the pilots | in progress |
+| M8 | Deep dive + interview sections for all 24 modules | Every module has template v2 | |
+| M9 | New topics (§12): AE modelling/dbt/quality, DE design/orchestration/streaming/Spark/lakehouse/CDC, AI/LLM track, SWE track, leadership track | Built, tested, deployed | |
+| M10 | Lab API + provider adapters + first four integration labs | Real queries run on all four providers under budget caps | |

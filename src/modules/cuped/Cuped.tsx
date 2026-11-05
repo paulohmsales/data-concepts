@@ -188,7 +188,7 @@ export default function Cuped() {
           </StatRow>
           <PlotFigure build={buildMany} label="Distribution of raw and CUPED estimates across reruns" />
           <p className="try">
-            Try: ρ = 0 gives no gain at all (the covariate predicts nothing). ρ = 0.9 keeps only 19% of the
+            Ρ = 0 gives no gain at all (the covariate predicts nothing). ρ = 0.9 keeps only 19% of the
             variance: a test that needed four weeks could finish in about one.
           </p>
         </div>

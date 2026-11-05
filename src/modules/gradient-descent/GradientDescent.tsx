@@ -131,7 +131,7 @@ export default function GradientDescent() {
           </StatRow>
           <PlotFigure build={buildLoss} label="Loss gap over steps" />
           <p className="try">
-            Try: on the bowl with κ = 10, slide the learning rate up slowly. Below {lrFmt(maxStableLr(c.kappa))} it settles;
+            On the bowl with κ = 10, slide the learning rate up slowly. Below {lrFmt(maxStableLr(c.kappa))} it settles;
             above it the path flies off. Then set κ = 1: a round bowl, where a single big step lands almost on the
             star.
           </p>

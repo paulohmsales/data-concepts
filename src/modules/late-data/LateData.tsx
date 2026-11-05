@@ -167,7 +167,7 @@ export default function LateData() {
           </p>
           <PlotFigure build={buildWindows} label="Per-window counts: counted, dropped, and by arrival time" />
           <p className="try">
-            Try: set allowed lateness to 0. The watermark hugs the newest event and every slightly delayed event is
+            Set allowed lateness to 0. The watermark hugs the newest event and every slightly delayed event is
             dropped. Raise stragglers to 10%: even 60 s of lateness can’t save them, because they’re minutes late.
           </p>
         </div>

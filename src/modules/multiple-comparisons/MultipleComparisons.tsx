@@ -181,7 +181,7 @@ export default function MultipleComparisons() {
           <p className="lede">The same setup rerun 1,500 times, for every correction. Dashed line: α.</p>
           <PlotFigure build={buildRates} label="Family-wise error, false discovery rate and power by correction" />
           <p className="try">
-            Try: set real effects to 0. Without a correction, “P(any false positive)” is huge; Bonferroni
+            Set real effects to 0. Without a correction, “P(any false positive)” is huge; Bonferroni
             and Holm pull it to α. Then set 30 of 100 real: BH finds far more of them than Bonferroni
             while keeping the false-discovery share below α.
           </p>

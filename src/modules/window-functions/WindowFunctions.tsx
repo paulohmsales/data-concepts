@@ -203,7 +203,7 @@ export default function WindowFunctions() {
           </p>
           <PlotFigure build={buildLine} label="Window result per row, by store" />
           <p className="try">
-            Try: sum with ROWS unbounded → current is a running total. Switch to ROWS 2 preceding for a
+            Sum with ROWS unbounded → current is a running total. Switch to ROWS 2 preceding for a
             3-row moving sum, then to whole partition for the store total on every row. Turn off
             PARTITION BY and see the frames cross stores.
           </p>

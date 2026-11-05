@@ -135,7 +135,7 @@ export default function RegressionToMean() {
           </StatRow>
           <PlotFigure build={buildScatter} label="Scatter of test 1 against test 2 scores" />
           <p className="try">
-            Try: set reliability to 100%: no luck, no regression, everyone sits on the diagonal. At 0%
+            Set reliability to 100%: no luck, no regression, everyone sits on the diagonal. At 0%
             the scores are pure luck and the selected group falls all the way back to 100.
           </p>
         </div>

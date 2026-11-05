@@ -157,7 +157,7 @@ export default function Roc() {
             ]}
           />
           <p className="try">
-            Try: drag the threshold. The orange dot slides along the ROC curve, which itself never moves. Then change the separation:
+            Drag the threshold. The orange dot slides along the ROC curve, which itself never moves. Then change the separation:
             that reshapes the curve. Separation 0 is the diagonal (AUC 0.5): a coin flip.
           </p>
         </div>

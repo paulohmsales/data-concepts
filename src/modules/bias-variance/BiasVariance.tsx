@@ -170,7 +170,7 @@ export default function BiasVariance() {
           </StatRow>
           <PlotFigure build={buildErrors} label="Training and test error by polynomial degree" />
           <p className="try">
-            Try: degree 0–1 is a stiff line that misses the curve every time (the grey refits agree with each other
+            Degree 0–1 is a stiff line that misses the curve every time (the grey refits agree with each other
             and are all wrong: bias). Degree 10+ chases every point (refits disagree wildly: variance). The
             lowest test error here is at degree {best.degree}.
           </p>

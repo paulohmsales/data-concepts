@@ -146,7 +146,7 @@ export default function Simpsons() {
           </p>
           <PlotFigure build={buildMix} label="Pooled rate as a weighted average of group rates" />
           <p className="try">
-            Try: drag both “hard cases among” sliders to the same value. The dots line up vertically and
+            Drag both “hard cases among” sliders to the same value. The dots line up vertically and
             the paradox disappears. Then give B most of the hard cases instead and watch B look
             terrible.
           </p>

@@ -160,7 +160,7 @@ export default function Bootstrap() {
           </StatRow>
           <PlotFigure build={buildReps} label="Histogram of bootstrap replicates with the percentile interval" />
           <p className="try">
-            Try: pick the mean and compare the bootstrap interval with the formula interval: they nearly agree. Now pick the 90th percentile, where there is no simple formula and the bootstrap still gives an answer. Small n with the median makes a spiky histogram: a median of 5 values can only be one of those values.
+            Pick the mean and compare the bootstrap interval with the formula interval: they nearly agree. Now pick the 90th percentile, where there is no simple formula and the bootstrap still gives an answer. Small n with the median makes a spiky histogram: a median of 5 values can only be one of those values.
           </p>
         </div>
       }

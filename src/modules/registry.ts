@@ -1,5 +1,6 @@
 import { lazy, type ComponentType } from 'react'
 
+/** Tracks shown in the sidebar, in order. Planned tracks appear once they have a module. */
 export const CATEGORIES = [
   'Statistics',
   'Experimentation',
@@ -7,19 +8,65 @@ export const CATEGORIES = [
   'Data engineering',
   'Data analysis',
   'Machine learning',
+  'AI engineering',
+  'Software engineering',
+  'Data leadership',
 ] as const
 
 export type Category = (typeof CATEGORIES)[number]
+
+export const ROLES = {
+  da: 'Data analyst',
+  ae: 'Analytics engineer',
+  de: 'Data engineer',
+  ds: 'Data scientist',
+  mle: 'ML engineer',
+  ai: 'AI / LLM engineer',
+  swe: 'Software engineer',
+  mgr: 'Data manager / lead',
+} as const
+
+export type Role = keyof typeof ROLES
 
 export interface ModuleEntry {
   slug: string
   title: string
   category: Category
   summary: string
+  /** Roles this module matters most for (drives the roles page and the module header). */
+  roles: Role[]
   Component: ComponentType
 }
 
-export const modules: ModuleEntry[] = [
+/** Roles per module; kept apart from the entries so the list stays readable. */
+const ROLE_MAP: Record<string, Role[]> = {
+  clt: ['da', 'ds'],
+  'confidence-intervals': ['da', 'ds'],
+  bootstrap: ['ds', 'da'],
+  'simpsons-paradox': ['da', 'ds', 'mgr'],
+  'regression-to-the-mean': ['da', 'ds', 'mgr'],
+  'ab-testing': ['ds', 'da', 'mgr'],
+  'multiple-comparisons': ['ds', 'da'],
+  'sample-ratio-mismatch': ['ds', 'de'],
+  cuped: ['ds'],
+  'join-fanout': ['ae', 'da', 'de'],
+  'window-functions': ['ae', 'da', 'de'],
+  'surrogate-keys': ['ae', 'de'],
+  snapshots: ['de', 'ae'],
+  'retries-idempotency': ['de', 'swe'],
+  'late-data': ['de', 'swe'],
+  partitioning: ['de', 'ae'],
+  cohorts: ['da', 'ds', 'mgr'],
+  funnels: ['da', 'ae'],
+  'trend-seasonality': ['da', 'ds'],
+  'bias-variance': ['ds', 'mle'],
+  leakage: ['ds', 'mle'],
+  'gradient-descent': ['mle', 'ds'],
+  'roc-thresholds': ['ds', 'mle', 'ai'],
+  'class-imbalance': ['ds', 'mle'],
+}
+
+const entries: Omit<ModuleEntry, 'roles'>[] = [
   {
     slug: 'clt',
     title: 'Central limit theorem',
@@ -189,3 +236,16 @@ export const modules: ModuleEntry[] = [
     Component: lazy(() => import('./class-imbalance/ClassImbalance.tsx')),
   },
 ]
+
+export const modules: ModuleEntry[] = CATEGORIES.flatMap((cat) =>
+  entries.filter((m) => m.category === cat).map((m) => ({ ...m, roles: ROLE_MAP[m.slug] ?? [] })),
+)
+
+export const moduleBySlug = (slug: string) => modules.find((m) => m.slug === slug)
+
+/** Previous and next module in sidebar order. */
+export function neighbours(slug: string) {
+  const i = modules.findIndex((m) => m.slug === slug)
+  return { prev: i > 0 ? modules[i - 1] : undefined, next: i >= 0 && i < modules.length - 1 ? modules[i + 1] : undefined }
+}
+
