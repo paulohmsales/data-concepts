@@ -1,6 +1,6 @@
 # Content API. Build context: a folder holding api/ and content/ (deploy.sh assembles it).
 FROM python:3.13-slim
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/uv
+RUN pip install --no-cache-dir "uv>=0.9,<1"
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy CONTENT_DIR=/app/content CONTENT_DB=/app/content.db
 COPY api/pyproject.toml api/uv.lock ./
