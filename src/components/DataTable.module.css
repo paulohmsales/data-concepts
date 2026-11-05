@@ -59,3 +59,14 @@
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   font-weight: 600;
 }
+
+.wrapText {
+  width: 100%;
+}
+
+.wrapText th,
+.wrapText td {
+  white-space: normal;
+  vertical-align: top;
+  line-height: 1.4;
+}

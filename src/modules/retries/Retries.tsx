@@ -2,7 +2,6 @@ import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Choice, ResetButton, SeedControl } from '../../components/Controls.tsx'
 import DataTable from '../../components/DataTable.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -89,26 +88,8 @@ export default function Retries() {
 
   return (
     <ModuleLayout
-      title="Retries and idempotency"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            A service sends an event (“charge Ana $50”) and waits for “OK”. Nothing comes back. Two very
-            different things could have happened: the request never arrived, or it arrived, was
-            processed, and the <em>reply</em> got lost. From the sender’s side they look identical: a
-            timeout.
-          </p>
-          <p>
-            So you choose. <b>Don’t retry</b>, and some events are lost (at-most-once). <b>Retry</b>, and
-            some events are processed twice (at-least-once). There is no network trick that avoids
-            both. What you can do is make the receiver <b>idempotent</b>: processing the same event twice
-            has the same effect as once, typically by keying writes on an event id (upsert, MERGE,
-            INSERT … ON CONFLICT DO NOTHING). At-least-once delivery + idempotent processing is what
-            people mean by “exactly once”.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <h3>What the first 20 events went through</h3>
@@ -143,11 +124,6 @@ export default function Retries() {
               },
             ]}
           />
-          <p className="try">
-            Set acks lost to 0%. Retrying + INSERT looks perfect, until the network has a bad day.
-            Then set requests lost to 0% and acks lost high: “send once” looks lossless but quietly
-            depends on luck.
-          </p>
         </div>
       }
       breakIt={
@@ -175,28 +151,6 @@ ON CONFLICT (event_id) DO NOTHING;`}</pre>
             events and derive the balance.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'Why can’t a sender tell a lost request from a lost acknowledgement?',
-              a: 'In both cases it sees the same thing: no reply before the timeout. The difference happened on the other side of the network, which is exactly what it can’t observe.',
-            },
-            {
-              q: 'What do at-most-once, at-least-once and exactly-once mean?',
-              a: 'At-most-once: never retry, so events can be lost but never duplicated. At-least-once: retry until acknowledged, so nothing is lost but events can be processed more than once. Exactly-once (effectively): at-least-once delivery plus idempotent processing, so duplicates have no extra effect.',
-            },
-            {
-              q: 'How do you make a write idempotent? Give two ways.',
-              a: 'Key it on a unique event/idempotency id and upsert or ignore conflicts (MERGE, INSERT … ON CONFLICT DO NOTHING); or make the write an overwrite of a deterministic unit (replace partition dt=2026-03-01 with exactly this data). Avoid relative updates like “add 50”.',
-            },
-            {
-              q: 'With a 10% chance of losing acks and unlimited retries, how many rows do you expect per event if the sink appends?',
-              a: 'Each event is written until an ack gets back: expected writes = 1 / (1 − 0.1) ≈ 1.11, so about 11% duplicates.',
-            },
-          ]}
-        />
       }
     />
   )

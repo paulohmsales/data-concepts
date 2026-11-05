@@ -25,5 +25,8 @@ export const visuals: Record<string, ComponentType<VisualProps>> = {
   'ae.fanoutJoin': lazy(() => import('./ae/FanoutJoin.tsx')),
   'ae.windowFrame': lazy(() => import('./ae/WindowFrame.tsx')),
   'ae.keyShift': lazy(() => import('./ae/KeyShift.tsx')),
+  'de.ackLost': lazy(() => import('./de/AckLost.tsx')),
+  'de.streamWindows': lazy(() => import('./de/StreamWindows.tsx')),
+  'de.pruneCalendar': lazy(() => import('./de/PruneCalendar.tsx')),
   'snapshots.watermark': lazy(() => import('./snapshots/WatermarkTimeline.tsx')),
 }

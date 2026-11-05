@@ -64,6 +64,7 @@ function BlockView({ block: b }: { block: Block }) {
     case 'table':
       return (
         <DataTable
+          wrap
           rows={b.rows}
           rowKey={(_, i) => i}
           caption={b.caption ?? undefined}

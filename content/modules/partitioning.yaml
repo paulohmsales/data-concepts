@@ -25,3 +25,102 @@ check:
     A daily job’s aggregation takes 1 hour, but 15 of 16 tasks finish in 2 minutes. What do you suspect, and how do you fix it?
   a: |-
     Key skew: one key (a huge customer, or NULL/“unknown”) sends most rows to one task. Check row counts per key. Fix by filtering or handling the hot key separately, salting it into sub-keys and aggregating in two steps, or using the engine’s skew-join handling.
+experiments:
+  - title: Prune to a week
+    goal: Query the last 7 days of a table partitioned by day.
+    setup: {scheme: day, query: last7}
+    look: 7 of 90 partitions read; scanned equals needed.
+    why: |
+      The engine compares the WHERE clause with partition values (folder names) at planning time and never opens the other 83 folders.
+  - title: Hide the column in a function
+    goal: Ask for March with strftime(event_date, '%Y-%m') = '2026-03'.
+    setup: {scheme: day, query: marchFn}
+    look: All 90 partitions scanned, about three times the time of the range version.
+    why: |
+      Many engines can’t invert an arbitrary function back to partition values, so they must open every folder and evaluate it row by row. Write filters as plain ranges on the partition column.
+  - title: Too coarse
+    goal: Month partitions for a last-7-days query.
+    setup: {scheme: month, query: last7}
+    look: One partition read, but most of what it contains is wasted (about 77%).
+    why: |
+      Pruning works at partition granularity. A month folder can’t be split, so a week’s query pays for the whole month.
+  - title: Too fine
+    goal: Partition by user_id and count everything.
+    setup: {scheme: user, query: all}
+    look: 50,000 tiny files; the per-file overhead dominates (minutes instead of seconds).
+    why: |
+      Every file has a fixed cost (list, open, read footer, schedule a task). High-cardinality partition keys create millions of small files. Put such columns in clustering or sort order inside larger files instead.
+  - title: One hot key
+    goal: A customer with 30% of all rows, hash-partitioned over 16 workers.
+    setup: {hotShare: 0.3, salt: 1, workers: 16}
+    look: One worker does about 34% of the work while the others finish early. Raise the salt buckets to spread it.
+    why: |
+      Hash partitioning sends every row of a key to the same worker. Salting splits the hot key into k sub-keys (key plus a random 0..k−1), aggregates partially, then combines, so the work spreads over k workers.
+
+deep_dive:
+  - type: heading
+    text: The engine reads folder names first
+  - type: visual
+    key: de.pruneCalendar
+    props: {query: last7}
+    caption: A table stored as one folder per day. Pick a query and see which folders the engine has to open. Partition pruning happens before any data is read.
+  - type: heading
+    text: Three levels of skipping
+  - type: steps
+    items:
+      - title: Partition pruning
+        md: Skip whole folders (or Iceberg/Delta partitions) by their values. Free, and needs filters on the partition columns.
+      - title: File-level statistics
+        md: Table formats keep min/max per column per file. Files whose ranges can’t match the filter are skipped (“data skipping”). Sorting or clustering data by commonly filtered columns makes these ranges narrow.
+      - title: Row groups and pages
+        md: Inside each Parquet file, row-group statistics and dictionaries let readers skip chunks and read only the needed columns (columnar projection).
+  - type: table
+    columns:
+      - {key: engine, label: Engine}
+      - {key: layout, label: Layout tools}
+    rows:
+      - {engine: "Hive-style tables (Athena, Spark)", layout: "PARTITIONED BY folders; bucketing; file sizes are your job"}
+      - {engine: Iceberg, layout: "Hidden partitioning (days(ts), bucket(16, id)), partition evolution, sort orders, compaction"}
+      - {engine: Delta Lake, layout: "Partitions (best for low cardinality), liquid clustering, OPTIMIZE / Z-order, data skipping stats"}
+      - {engine: BigQuery, layout: "Partition by date/integer range, cluster by up to 4 columns; partition filters can be required"}
+      - {engine: Snowflake, layout: "Automatic micro-partitions; clustering keys for very large tables; pruning shown in the query profile"}
+  - type: heading
+    text: Choosing a partition key
+  - type: markdown
+    md: |
+      - Partition by the column most queries filter on, almost always a **date**.
+      - Aim for partitions of hundreds of MB to a few GB, and no more than a few thousand of them for a table. Daily for big tables, monthly for small ones.
+      - Never partition by a high-cardinality column (user_id, order_id). Cluster or sort by it instead.
+      - Filter on the partition column directly, with literal values or parameters, not through functions or casts (Iceberg’s hidden partitioning and BigQuery’s partitioning on a timestamp avoid some of these traps).
+  - type: heading
+    text: Skew, and salting
+  - type: code
+    lang: sql
+    caption: Two-stage aggregation with a salt, to spread a hot key over 16 tasks.
+    code: |
+      WITH salted AS (
+        SELECT customer_id, floor(random() * 16) AS salt, amount FROM sales
+      ), partial AS (
+        SELECT customer_id, salt, sum(amount) AS amount FROM salted GROUP BY customer_id, salt
+      )
+      SELECT customer_id, sum(amount) AS amount FROM partial GROUP BY customer_id;
+  - type: callout
+    kind: prod
+    md: |
+      For slow joins between two large tables (the Databricks interview question): check the query plan first. Broadcast the small side if it fits; make sure both sides prune (partition and file stats); fix skew (Spark’s adaptive query execution splits skewed partitions; salt otherwise); co-locate data by clustering both tables on the join key; drop columns you don’t need before the join; and compact small files. Cost falls with the same steps, plus right-sized and auto-terminating clusters.
+  - type: related
+    slugs: [snapshots, late-data, join-fanout]
+
+interview:
+  - level: mid
+    q: What is partition pruning and what stops it from working?
+    answer: The engine skips partitions whose values can’t satisfy the filter, using only metadata. It stops working when the filter isn’t on the partition column, wraps it in a function or cast the planner can’t map back, uses values only known at runtime in some engines, or when the table isn’t partitioned the way it’s queried.
+    listen_for: [Metadata-only skipping, Filter must hit the partition column directly, Functions and casts break it]
+  - level: mid
+    q: What is data skew and how do you deal with it?
+    answer: Uneven distribution of rows across partitions or tasks, typically one hot key (a huge customer, NULL, “unknown”), so one task takes far longer than the rest. Detect with per-key counts and task duration spread. Fix by handling the hot key separately, salting it into sub-keys with two-stage aggregation, broadcast joins for the small side, or the engine’s adaptive skew handling.
+    listen_for: [Definition with a hot-key example, Detection, Salting or AQE or broadcast]
+  - level: senior
+    q: How would you optimise a slow and expensive join between two large Delta tables in Databricks?
+    answer: Read the query profile. Is it a shuffle (sort-merge) join, is one side broadcastable, is there skew, how many files and bytes are scanned? Then make both sides prune (filters on partition/cluster columns, data skipping), cluster both tables on the join key (liquid clustering/Z-order) and compact small files, select only needed columns, broadcast the smaller side if it fits, enable AQE skew join handling or salt hot keys, and consider pre-aggregating before joining. For cost, run it on right-sized job clusters with Photon and auto-termination, and schedule it incrementally instead of joining full history each run.
+    listen_for: [Starts from the query plan, Pruning and file layout, Broadcast vs shuffle, Skew handling, Incremental processing and cluster sizing for cost]

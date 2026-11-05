@@ -1,7 +1,6 @@
 import * as Plot from '@observablehq/plot'
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { ResetButton, SeedControl, Toggle } from '../../components/Controls.tsx'
-import ExplainBack from '../../components/ExplainBack.tsx'
 import ModuleLayout from '../../components/ModuleLayout.tsx'
 import PlotFigure from '../../components/PlotFigure.tsx'
 import Slider from '../../components/Slider.tsx'
@@ -124,28 +123,8 @@ export default function LateData() {
 
   return (
     <ModuleLayout
-      title="Late data and watermarks"
+      onPreset={(p) => setC({ ...DEFAULTS, ...(p as Partial<Controls>) })}
       controls={panel}
-      intuition={
-        <>
-          <p>
-            Every event has two times: when it <b>happened</b> (event time: the tap on the phone) and when
-            it <b>reached you</b> (processing time). Networks, retries and phones in airplane mode put a gap
-            between them, and the gap varies. Events arrive out of order.
-          </p>
-          <p>
-            You want counts per minute of <em>event</em> time. But when can you publish “12:01 had 600
-            taps”? Something from 12:01 might still be on its way. A <b>watermark</b> is the pipeline’s
-            running guess: “I’ve probably seen everything up to time W”. Here, W = latest event time seen −
-            allowed lateness. When W passes a window’s end, the window is emitted, and stragglers for it
-            are dropped (or sent to a correction path).
-          </p>
-          <p>
-            Allowed lateness is a dial between <b>fast</b> and <b>complete</b>. There is no setting that
-            gives you both.
-          </p>
-        </>
-      }
       play={
         <div className={stale ? styles.stale : undefined}>
           <StatRow>
@@ -166,10 +145,6 @@ export default function LateData() {
             bucketing on arrival time instead.
           </p>
           <PlotFigure build={buildWindows} label="Per-window counts: counted, dropped, and by arrival time" />
-          <p className="try">
-            Set allowed lateness to 0. The watermark hugs the newest event and every slightly delayed event is
-            dropped. Raise stragglers to 10%: even 60 s of lateness can’t save them, because they’re minutes late.
-          </p>
         </div>
       }
       breakIt={
@@ -192,28 +167,6 @@ export default function LateData() {
             the true, flat shape, as long as the allowed lateness covers the outage.
           </p>
         </div>
-      }
-      explainBack={
-        <ExplainBack
-          questions={[
-            {
-              q: 'What is the difference between event time and processing time, and which should a business metric use?',
-              a: 'Event time is when it happened; processing time is when the system saw it. Business metrics (“purchases per hour”) almost always want event time; processing time measures your pipeline, and it distorts metrics whenever delays change (outages, backfills, retries).',
-            },
-            {
-              q: 'What is a watermark?',
-              a: 'A moving threshold of event time that says “events older than this have (probably) all arrived”. It lets a streaming system decide when a window is complete enough to emit. Here it is max event time seen minus an allowed lateness.',
-            },
-            {
-              q: 'What do you trade when you increase allowed lateness?',
-              a: 'Completeness for latency (and memory: windows stay open longer). Fewer events are dropped, but every window’s result comes out later.',
-            },
-            {
-              q: 'What happens to events that arrive after their window closed, and what can you do about them?',
-              a: 'By default they are dropped (or counted in no window). Options: allow longer lateness; emit updated results for the window (retractions/upserts downstream); send them to a side output and reconcile in a batch job that recomputes from event time.',
-            },
-          ]}
-        />
       }
     />
   )

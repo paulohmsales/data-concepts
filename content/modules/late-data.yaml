@@ -27,3 +27,97 @@ check:
 - q: What happens to events that arrive after their window closed, and what can you do about them?
   a: |-
     By default they are dropped (or counted in no window). Options: allow longer lateness; emit updated results for the window (retractions/upserts downstream); send them to a side output and reconcile in a batch job that recomputes from event time.
+experiments:
+  - title: No patience
+    goal: Allowed lateness 0.
+    setup: {allowedLateness: 0}
+    look: Results come out almost immediately, but every slightly delayed event is dropped (several percent).
+    why: |
+      The watermark equals the newest event time seen, so any event that arrives after a newer one, which is almost all of them with network jitter, finds its window already closed.
+  - title: Wait a minute
+    goal: Allowed lateness 60 s.
+    setup: {allowedLateness: 60}
+    look: Drops fall below 1%, but each window’s result now comes out about a minute after the window ends.
+    why: |
+      Every second of allowed lateness delays every result by a second. You trade latency (and memory for open windows) for completeness.
+  - title: Offline phones
+    goal: 10% of events come from devices that were offline.
+    setup: {stragglers: 0.1, allowedLateness: 10}
+    look: Even with lateness set, a visible share is dropped. The red dots far below the diagonal are minutes late.
+    why: |
+      A long tail of delays can’t be covered by any reasonable lateness. Those events need a correction path: a side output, a later batch recomputation, or updatable results.
+  - title: The outage
+    goal: The network goes down for a minute; devices send everything when it’s back.
+    setup: {outage: true, allowedLateness: 120}
+    look: The black ticks (bucketing by arrival time) show a dead minute and a spike; the event-time bars stay flat.
+    why: |
+      Processing-time windows measure your pipeline, not the world. An outage, a backfill or a consumer restart all reshape processing-time counts. Event-time windows with enough lateness keep the true shape.
+
+deep_dive:
+  - type: heading
+    text: Watch the windows close
+  - type: visual
+    key: de.streamWindows
+    props: {lateness: 3}
+    caption: "Ten-second windows by event time. Press play: events arrive (orange ones were delayed by more than 5 s), the watermark (newest event time seen minus the allowed lateness) sweeps right, and each window locks when the watermark passes its end. Anything arriving for a locked window is dropped (✗). Change the lateness and replay."
+  - type: heading
+    text: Two clocks, two questions
+  - type: table
+    columns:
+      - {key: q, label: ""}
+      - {key: event, label: Event time}
+      - {key: proc, label: Processing time}
+    rows:
+      - {q: Meaning, event: When it happened (on the device or source), proc: When the pipeline saw it}
+      - {q: Answers, event: "“How many purchases between 12:00 and 12:01?”", proc: "“How much did we process in that minute?”"}
+      - {q: Stable under delays and replays, event: "Yes", proc: "No"}
+      - {q: Needs, event: "Watermarks, state for open windows, a lateness policy", proc: Nothing special}
+  - type: heading
+    text: Watermarks, triggers and lateness
+  - type: steps
+    items:
+      - title: Watermark
+        md: "The system’s estimate that event time has reached W: few events older than W will still arrive. Usually the newest event time minus a bound (bounded out-of-orderness), or per-source low watermarks combined."
+      - title: Trigger
+        md: When to emit a window’s result. At the watermark (complete-ish), early and repeatedly (speculative updates), or on every late event (corrections).
+      - title: Allowed lateness
+        md: How long to keep a window’s state after the watermark passes, to fold late events in and emit an updated result.
+      - title: Late data handling
+        md: "Drop, send to a side output (dead-letter table) for batch reconciliation, or update the result downstream (retractions/upserts)."
+  - type: code
+    lang: sql
+    caption: The same ideas in Flink SQL. The watermark is declared on the source table; windows close as it advances.
+    code: |
+      CREATE TABLE ride_requests (
+        hex_id STRING,
+        event_time TIMESTAMP(3),
+        WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND
+      ) WITH ('connector' = 'kafka', 'topic' = 'ride_requests', 'format' = 'json');
+
+      SELECT hex_id, window_start, count(*) AS requests
+      FROM TABLE(TUMBLE(TABLE ride_requests, DESCRIPTOR(event_time), INTERVAL '1' MINUTES))
+      GROUP BY hex_id, window_start, window_end;
+  - type: worked
+    title: Surge pricing (the interview question)
+    md: |
+      Demand and supply per hexagon per minute, used to set prices within seconds. Freshness beats completeness: a slightly wrong multiplier now is better than a perfect one five minutes late. So use a small allowed lateness (seconds), drop or ignore stragglers in the live path, and recompute accurate counts later in batch for analytics and pricing models. Say this trade-off out loud. It is what the question is testing.
+  - type: callout
+    kind: prod
+    md: Monitor watermark lag (now − watermark) per source. One slow partition or idle source can hold the global watermark back and stall every window; most engines let you mark idle sources so they don’t.
+  - type: related
+    slugs: [snapshots, retries-idempotency, partitioning, trend-seasonality]
+
+interview:
+  - level: mid
+    q: What is a watermark in stream processing?
+    answer: A moving point in event time that says “we believe we’ve seen (almost) all events up to here”. It lets the engine decide when a window is complete enough to emit and to clean up state. It’s typically max event time seen minus an allowed out-of-orderness, or a combination of per-partition watermarks.
+    listen_for: [Event-time progress estimate, Triggers emission and state cleanup, Heuristic, not a guarantee]
+  - level: senior
+    q: Design the pipeline behind surge pricing.
+    answer: |
+      Ask first: how fresh (seconds), how accurate, which geography unit. Then: ride requests and driver locations/status stream into Kafka; a Flink job maps locations to hexagons (H3) and counts demand and supply per hexagon in short tumbling or sliding windows on event time with a small watermark delay; a pricing service turns the supply/demand gap into a multiplier (smoothed to avoid flapping) and writes it to a low-latency key-value store the app reads. Late events are dropped from the live path; a batch job recomputes accurate history for analytics and model training. For resilience, run in multiple regions with one primary and a fallback multiplier if data stops. The key trade-off: freshness over completeness and consistency.
+    listen_for: [Asks about freshness first, Event-time windows per spatial cell, Small lateness and the trade-off said out loud, Low-latency serving store, Batch path for accuracy, Failure handling]
+  - level: senior
+    q: How do you reconcile real-time Kafka data with daily batch sources in a silver layer?
+    answer: Land both with event time and ingestion time. Treat the stream as provisional and the batch as authoritative for closed periods. Build silver tables keyed by business key and event date; MERGE stream data continuously and let the daily batch MERGE over it (later, more complete). Record each row’s source and load time, define when a day is final (after the batch plus a lateness window), and expose freshness and completeness flags so consumers know which days may still change.
+    listen_for: [Event time vs ingestion time, Authoritative source per period, Idempotent MERGE by key, Explicit finality and flags]

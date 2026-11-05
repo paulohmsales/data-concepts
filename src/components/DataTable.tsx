@@ -16,6 +16,7 @@ export default function DataTable<T>({
   rowClass,
   caption,
   onRowClick,
+  wrap,
 }: {
   rows: readonly T[]
   columns: readonly Column<T>[]
@@ -24,10 +25,12 @@ export default function DataTable<T>({
   caption?: ReactNode
   /** Makes rows selectable (click or Enter). */
   onRowClick?: (row: T, i: number) => void
+  /** Let long cell text wrap (prose tables) instead of scrolling. */
+  wrap?: boolean
 }) {
   return (
     <div className={styles.wrap}>
-      <table className={styles.table}>
+      <table className={`${styles.table} ${wrap ? styles.wrapText : ''}`}>
         {caption && <caption>{caption}</caption>}
         <thead>
           <tr>

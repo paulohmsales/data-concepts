@@ -25,3 +25,111 @@ check:
     With a 10% chance of losing acks and unlimited retries, how many rows do you expect per event if the sink appends?
   a: |-
     Each event is written until an ack gets back: expected writes = 1 / (1 − 0.1) ≈ 1.11, so about 11% duplicates.
+experiments:
+  - title: Retry plus INSERT
+    goal: Retry until acknowledged, writing with a plain INSERT, on a network that loses 10% of acks.
+    setup: {retry: at-least-once, sink: append, pAckLost: 0.1, pRequestLost: 0.1}
+    look: Nothing lost, but about 11% duplicate rows.
+    why: |
+      Every lost ack makes the producer resend something the sink already wrote. With unlimited retries each event is written 1/(1 − 0.1) ≈ 1.11 times on average.
+  - title: Never retry
+    goal: Send once and hope.
+    setup: {retry: at-most-once, sink: append}
+    look: No duplicates, but about 10% of events lost (the requests that never arrived).
+    why: |
+      Without retries, a lost request is a lost event. Acks lost on the way back don’t matter here, because the write already happened.
+  - title: Effectively exactly once
+    goal: Retry until acknowledged, and upsert by event id.
+    setup: {retry: at-least-once, sink: upsert}
+    look: Zero lost, zero duplicates, whatever the network does.
+    why: |
+      At-least-once delivery guarantees every event arrives at least once; the idempotent write makes the extra arrivals no-ops. That pair is what “exactly once” means in practice.
+  - title: A bad network day
+    goal: Lose 40% of acks.
+    setup: {pAckLost: 0.4, retry: at-least-once, sink: append}
+    look: Duplicates explode (about 67% extra rows). The theory chart shows the curve bending upward.
+    why: |
+      1/(1 − p) grows fast as p rises. Systems that “usually” don’t duplicate fall apart exactly when the network is degraded, during incidents.
+
+deep_dive:
+  - type: heading
+    text: Where the duplicate comes from
+  - type: stepper
+    key: de.ackLost
+    caption: A payment service (producer) and a payments table (sink), drawn as a sequence diagram; time runs downward.
+    steps:
+      - title: The normal case
+        md: The producer sends a charge, the sink writes it and replies OK.
+        state: {phase: 1, sink: append}
+      - title: The reply is lost
+        md: The sink wrote Bruno’s charge, but the OK never arrives. To the producer this is indistinguishable from a lost request. All it sees is a timeout.
+        state: {phase: 2, sink: append}
+      - title: Retry with INSERT
+        md: The producer retries, as it should, and the sink inserts a second $30 charge.
+        state: {phase: 3, sink: append}
+      - title: Retry with an idempotency key
+        md: The same retry against a sink that upserts by event id finds evt_a71d already there and does nothing. The customer is charged once.
+        state: {phase: 3, sink: upsert}
+  - type: heading
+    text: The three delivery guarantees
+  - type: table
+    columns:
+      - {key: g, label: Guarantee}
+      - {key: how, label: How}
+      - {key: risk, label: Failure mode}
+    rows:
+      - {g: At most once, how: "Send once, never retry", risk: Lost events}
+      - {g: At least once, how: "Retry until acknowledged", risk: Duplicates}
+      - {g: Effectively exactly once, how: "At least once + idempotent processing (dedupe by key, transactional writes)", risk: "Cost and complexity of the dedupe state"}
+  - type: markdown
+    md: |
+      True exactly-once delivery over an unreliable network is impossible (the two generals problem): the sender can never know for sure that the receiver got the message. So systems choose at-least-once, the only option that never loses data, and make the effect idempotent.
+  - type: heading
+    text: Making writes idempotent
+  - type: code
+    lang: sql
+    code: |
+      -- 1. Idempotency key: the event id decides, not the number of attempts
+      INSERT INTO payments (event_id, customer, amount) VALUES ('evt_a71d', 'bruno', 30)
+      ON CONFLICT (event_id) DO NOTHING;
+
+      -- 2. MERGE a batch by key (the batch can be replayed safely)
+      MERGE INTO orders t USING staged s ON t.order_id = s.order_id
+      WHEN MATCHED THEN UPDATE SET status = s.status, updated_at = s.updated_at
+      WHEN NOT MATCHED THEN INSERT *;
+
+      -- 3. Overwrite a deterministic unit (a retry replaces the same partition)
+      INSERT OVERWRITE TABLE events PARTITION (dt = '2026-03-01') SELECT * FROM staged_events_2026_03_01;
+  - type: markdown
+    md: |
+      Operations that are **not** idempotent: `balance = balance + 30`, `INSERT` without a key, `counter++`, sending an email, calling a third-party API without its idempotency header. Store the events and derive balances and counters from them, or guard each side effect with a key you check first.
+  - type: heading
+    text: The same idea in streaming systems
+  - type: markdown
+    md: |
+      - **Kafka producers** have an idempotent mode (producer id + sequence numbers) so broker-side retries don’t duplicate; **transactions** make “read, process, write and commit the offset” atomic.
+      - **Consumers** process and then commit offsets. A crash between the two replays messages, so the downstream write must be idempotent (or done in the same transaction as the offset).
+      - **Spark Structured Streaming / Flink** reach exactly-once end to end with checkpoints plus an idempotent or transactional sink (Delta/Iceberg commits, two-phase commit sinks).
+  - type: callout
+    kind: warn
+    title: Retry storms
+    md: Retries add load exactly when a system is struggling. Use exponential backoff with jitter (random spread), a cap on attempts, and circuit breakers, or a brief outage turns into a self-inflicted denial of service.
+  - type: callout
+    kind: prod
+    md: Third-party APIs (Stripe, many payment and email providers) accept an `Idempotency-Key` header. Generate one per logical operation, store it with the request, and reuse it on every retry.
+  - type: related
+    slugs: [snapshots, late-data, partitioning]
+
+interview:
+  - level: mid
+    q: What’s the difference between at-least-once and exactly-once processing, and how do you get exactly-once in practice?
+    answer: At-least-once retries until acknowledged, so nothing is lost but duplicates are possible. Exactly-once (effectively) adds idempotent or transactional processing so duplicates have no extra effect, e.g. dedupe by event id, upsert by key, or commit output and consumer offsets in one transaction.
+    listen_for: [Can’t avoid duplicates at the network level, Idempotency or transactions, Concrete mechanism]
+  - level: mid
+    q: Your Spark streaming job’s checkpoint location was deleted. What happens on restart, and what do you do?
+    answer: The job loses its record of processed offsets and state. Depending on the startingOffsets setting it reprocesses from the earliest data (duplicates into a non-idempotent sink, and stateful aggregations rebuilt wrongly) or starts from the latest (gap in data). Recover by restoring the checkpoint from backup if possible; otherwise restart from a known offset or timestamp and rely on an idempotent sink (MERGE by key, or Delta txnAppId/txnVersion for idempotent writes), then reconcile counts. Prevention is protecting the checkpoint path and making sinks idempotent.
+    listen_for: [Offsets and state live in the checkpoint, Duplicates or gaps, Idempotent sink as the safety net, Reconciliation]
+  - level: senior
+    q: How would you make 10,000 API calls from a Python script efficiently and safely?
+    answer: Use async I/O (asyncio with aiohttp/httpx) or a thread pool, with a concurrency limit (a semaphore) matched to the API’s rate limit; a token-bucket rate limiter; retries with exponential backoff and jitter only on retryable errors (429, 5xx, timeouts), honouring Retry-After; idempotency keys for non-GET calls; persisting progress (which ids are done) so a crash resumes instead of restarting; batching endpoints if the API offers them; and logging failures to a dead-letter list for a second pass.
+    listen_for: [Bounded concurrency, Rate limiting and backoff with jitter, Retry only what’s retryable, Resumable progress, Idempotency keys]
