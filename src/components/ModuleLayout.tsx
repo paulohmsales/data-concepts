@@ -7,6 +7,7 @@ import Blocks from './blocks/Blocks.tsx'
 import { Experiments, Interview } from './content.tsx'
 import ExplainBack from './ExplainBack.tsx'
 import Markdown from './Markdown.tsx'
+import Notes from './Notes.tsx'
 import styles from './ModuleLayout.module.css'
 
 interface Props {
@@ -45,6 +46,7 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
   ]
   const active = useScrollSpy(sections.map((s) => s.id))
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const stageVisible = useInView(stageRef)
   const progress = useProgress()
@@ -74,6 +76,12 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
           <button type="button" className={mp?.done ? styles.doneOn : styles.doneBtn} onClick={() => mark(m.slug, 'done', 0, !mp?.done)}>
             {mp?.done ? '✓ Module done' : 'Mark module done'}
           </button>
+          <button type="button" className={styles.doneBtn} onClick={() => setNotesOpen((o) => !o)} aria-expanded={notesOpen}>
+            ✎ Notes
+          </button>
+          <Link to={`/${m.slug}/cheatsheet`} className={styles.doneBtn}>
+            Cheat sheet
+          </Link>
         </div>
         {m.roles.length > 0 && (
           <div className={styles.roles}>
@@ -165,6 +173,7 @@ export default function ModuleLayout({ play, breakIt, controls, onPreset }: Prop
           </Link>
         )}
       </nav>
+      <Notes slug={m.slug} title={m.title} open={notesOpen} onClose={() => setNotesOpen(false)} />
     </article>
   )
 }

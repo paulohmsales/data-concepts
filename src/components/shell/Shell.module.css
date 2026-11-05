@@ -320,3 +320,18 @@
 .track ul {
   padding-left: 0.4rem;
 }
+
+/* printing (cheat sheets): just the page content */
+@media print {
+  .topbar,
+  .sidebar {
+    display: none !important;
+  }
+
+  .body,
+  .main {
+    display: block;
+    margin: 0;
+    padding: 0;
+  }
+}
