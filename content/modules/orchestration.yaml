@@ -1,0 +1,108 @@
+slug: orchestration
+title: Orchestration, backfills and SLAs
+track: data-engineering
+summary: how schedulers decide what runs next, why a backfill can make today's data late, and the knobs (priority, concurrency, depends_on_past) that fix or cause it.
+roles: [de, ae]
+lab: orchestration
+order: 5
+
+intuition: |
+  An orchestrator (Airflow, Dagster, Prefect, dbt Cloud jobs) runs pipelines as **DAGs**: tasks with dependencies, one **run** per schedule interval (usually per day). It starts each task when its upstream tasks have finished and a **worker slot** is free.
+
+  Most of the time this is boring. It gets interesting when demand exceeds slots, typically during a **backfill**, when you re-run many past days after a bug fix or a new model. Now 30 days of runs compete for the same workers as today's run, and the order the scheduler picks decides whether the dashboards everyone opens at 8 am are ready.
+
+  The lab runs a 5-task daily DAG (critical path 60 minutes) on a pool of workers. A 30-day backfill is queued at 05:00, today's run at 06:00, and today's data is promised by 08:00.
+
+experiments:
+  - title: The quiet day
+    goal: No backfill.
+    setup: {backfillDays: 0}
+    look: Today's run starts at 06:00 and is done at 07:00, which is exactly its critical path (extract → stg_events → join → publish). Workers are idle 84% of the time.
+    why: |
+      With free slots, a run takes as long as its longest dependency chain. Parallel tasks (the two staging models) don't add time.
+  - title: The starved run
+    goal: Queue a 30-day backfill with first-come-first-served scheduling.
+    setup: {backfillDays: 30, priority: fifo}
+    look: Today's data isn't ready until 12:55, almost 5 hours past the SLA. Workers are 99% busy with history.
+    why: |
+      The backfill's tasks were queued first, so they keep winning the free slots. Today's run waits behind hundreds of old tasks, and nobody notices until stakeholders ask why the dashboard is empty.
+  - title: Priority for today
+    goal: Same backfill, today's run first.
+    setup: {backfillDays: 30, priority: today-first}
+    look: Today is ready at 07:00 again, and the backfill still finishes in the same 9.75 hours.
+    why: |
+      Today's run needs only a few slots for an hour. Giving it priority (Airflow priority_weight, a dedicated pool, or a separate queue) costs the backfill almost nothing. This is the cheapest fix and the one teams forget.
+  - title: Throttle the backfill
+    goal: Limit the backfill to 2 active runs, back to FIFO.
+    setup: {backfillDays: 30, priority: fifo, maxActiveRuns: 2}
+    look: Today makes the SLA (07:30), but the backfill now takes 15 hours and workers are a third idle.
+    why: |
+      max_active_runs leaves headroom for other runs, but it's a blunt tool. It also throttles the backfill when nothing else needs the slots.
+  - title: The serial trap
+    goal: Turn on depends_on_past.
+    setup: {backfillDays: 30, priority: today-first, dependsOnPast: true}
+    look: Today's data arrives at 18:45, after the whole backfill, and priority can't help.
+    why: |
+      depends_on_past makes each day wait for the previous day's task. Today is the end of a 31-day chain. Use it only when a run truly needs yesterday's output (cumulative snapshots); otherwise make runs independent and idempotent so days can run in parallel.
+  - title: Throwing hardware at it
+    goal: Double the workers to 8, first-come-first-served.
+    setup: {backfillDays: 30, priority: fifo, slots: 8}
+    look: The backfill finishes in 5 hours, but today is still late (09:35).
+    why: |
+      More capacity shortens the queue but doesn't change its order. Priority and isolation are scheduling problems, not capacity problems.
+
+deep_dive:
+  - type: heading
+    text: The words orchestrators use
+  - type: table
+    columns:
+      - {key: term, label: Term}
+      - {key: means, label: Means}
+    rows:
+      - {term: "DAG run / logical date", means: "One execution of the pipeline for one interval. The logical date is the interval processed, not when it ran (the 2026-11-04 run usually runs on the 5th)"}
+      - {term: "catchup", means: "Whether missed past intervals are run automatically when a DAG is enabled or unpaused"}
+      - {term: "backfill", means: "Deliberately running past intervals, e.g. `airflow dags backfill -s 2026-10-01 -e 2026-10-30`"}
+      - {term: "pool / slots", means: "A shared limit on concurrent tasks (e.g. 4 warehouse connections)"}
+      - {term: "max_active_runs", means: "How many runs of one DAG may execute at once"}
+      - {term: "priority_weight", means: "Which ready task gets the next free slot"}
+      - {term: "depends_on_past", means: "A task waits for its own previous run to succeed"}
+      - {term: "sensor / asset trigger", means: "Wait for an external condition (a file, an upstream table) instead of a fixed time"}
+      - {term: "SLA / deadline", means: "When data must be ready; alert when it's at risk, not just when it's missed"}
+  - type: heading
+    text: Making backfills safe
+  - type: steps
+    items:
+      - title: Make each run idempotent
+        md: A run for date D overwrites exactly D's partition (insert overwrite, or delete then insert). Then any day can be re-run, in any order, any number of times (see Retries and idempotency).
+      - title: Parameterise by the logical date, never now()
+        md: "A query using `current_date` re-processes today when you backfill last month. Use the run's interval (`{{ ds }}`, `data_interval_start`)."
+      - title: Isolate production from history
+        md: A separate pool or queue for backfills, or lower priority, so today's run always gets slots. The warehouse needs isolation too (a separate warehouse or reservation).
+      - title: Throttle by downstream limits
+        md: Your bottleneck may be the source API or the warehouse, not the scheduler. Size concurrency to what they can take (see Rate limiting and retries).
+      - title: Validate before switching
+        md: Backfill into a new table or schema, reconcile totals against the old one, then swap. Readers never see a half-backfilled table.
+  - type: heading
+    text: Time-based vs data-aware scheduling
+  - type: markdown
+    md: |
+      Cron-style schedules (“run at 06:00”) assume upstream data is ready by then. When it isn't, the run processes partial data and succeeds, which is the worst outcome. **Data-aware scheduling** triggers a run when its inputs are updated: Airflow datasets/assets, Dagster software-defined assets, dbt Cloud jobs triggered on source freshness. Combine it with freshness checks (see Data quality and contracts) so a late upstream becomes a visible delay instead of a silently wrong dashboard.
+  - type: callout
+    kind: prod
+    md: Alert on SLA risk, not SLA breach. If today's run hasn't started by 06:30, or the critical path's remaining duration exceeds the time left, page someone while there's still time to act. Track the critical path's duration over time, since slow creep is how pipelines start missing deadlines.
+  - type: related
+    slugs: [retries-idempotency, queues, late-data, dbt, data-quality]
+
+interview:
+  - level: junior
+    q: What is a DAG in Airflow and why must it be acyclic?
+    answer: A set of tasks with dependencies, defining which must finish before others start. Acyclic means no task depends on itself through a loop, which would make a valid execution order impossible. The scheduler runs tasks in topological order, in parallel where dependencies allow.
+    listen_for: [Tasks and dependencies, Execution order, Parallelism]
+  - level: mid
+    q: What do catchup and backfill mean, and what can go wrong?
+    answer: Catchup automatically runs missed intervals when a DAG is enabled; a backfill runs a chosen range of past intervals. Problems include tasks using now() instead of the logical date, non-idempotent writes duplicating data, overloading sources or the warehouse, and starving today's runs of slots. Use logical dates, idempotent partition overwrites, throttling and priority or separate pools.
+    listen_for: [Logical date vs now, Idempotency, Resource contention, Isolation or priority]
+  - level: senior
+    q: You must reprocess two years of daily partitions after a logic fix, without affecting today's pipelines. Plan it.
+    answer: Make the job idempotent per partition and parameterised by date, and test on a few days. Write into a new table or versioned path, run in a separate pool or queue at low priority with concurrency sized to warehouse and source limits (most recent months first if they matter most), monitor cost and progress, reconcile old vs new totals per day, then swap atomically and communicate the change in historical numbers.
+    listen_for: [Idempotent per partition, Isolation from production, Concurrency sizing, Reconciliation, Atomic swap and communication]
