@@ -9,6 +9,8 @@ const PAGES = [
   { path: '/roles', title: 'Roles and paths', hint: 'what each role needs' },
   { path: '/platforms', title: 'Cloud platforms compared', hint: 'AWS, Google Cloud, Azure, Snowflake, Databricks' },
   { path: '/integrations', title: 'Integrations', hint: 'labs on real services' },
+  { path: '/cases', title: 'Case studies', hint: 'investigations across modules' },
+  { path: '/map', title: 'Concept map', hint: 'how the modules connect' },
 ]
 
 interface Item {
@@ -56,7 +58,9 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
             .map((h) =>
               h.kind === 'module'
                 ? { path: `/${h.ref}`, title: h.title, hint: h.snippet.replace(/\[|\]/g, '') }
-                : { path: `/platforms#${h.ref.split(':')[1]}`, title: h.title, hint: `${h.ref.split(':')[0].toUpperCase()} service` },
+                : h.kind === 'case'
+                  ? { path: `/cases/${h.ref}`, title: h.title, hint: 'case study' }
+                  : { path: `/platforms#${h.ref.split(':')[1]}`, title: h.title, hint: `${h.ref.split(':')[0].toUpperCase()} service` },
             )
             .filter((r) => !seen.has(r.path) && (seen.add(r.path), true))
     return [...titleMatches, ...fromSearch].slice(0, 14)

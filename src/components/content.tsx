@@ -169,7 +169,7 @@ function ExperimentItem({
           }}
         >
           <label htmlFor={`predict-${slug}-${i}`}>Before you look: what do you expect to happen, and why?</label>
-          <textarea id={`predict-${slug}-${i}`} rows={2} value={draft} onChange={(ev) => setDraft(ev.target.value)} placeholder="e.g. the false-positive rate goes up because…" disabled={!ready} />
+          <textarea id={`predict-${slug}-${i}`} rows={2} value={draft} onChange={(ev) => setDraft(ev.target.value)} placeholder="I expect… because…" disabled={!ready} />
           <div className={styles.predictActions}>
             <button type="submit" disabled={!ready || draft.trim().length < 3}>
               Reveal

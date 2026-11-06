@@ -1,0 +1,102 @@
+id: monday-revenue
+title: The Monday revenue report is 24% too high
+summary: The weekly revenue dashboard and finance disagree by almost a quarter. Two unrelated bugs are hiding in one number.
+roles: [ae, de, da]
+related: [join-fanout, retries-idempotency, data-quality, dimensional-modeling]
+order: 1
+
+brief: |
+  It's Monday morning. The weekly revenue dashboard says last week (26 October – 1 November) brought in **$97,001**. Finance, working from the order system, says **$78,266**. The CFO wants to know which number is right, and why they differ, before the 11:00 meeting.
+
+  You have four tables and two views:
+
+  - `orders_source`: the order system's records (finance's source of truth), one row per order.
+  - `payments`: one row per payment; an order can be paid with a gift card and a card.
+  - `raw_orders`: orders as the pipeline loaded them each morning, with a `load_id`.
+  - `dashboard_daily_revenue`: what the dashboard reads (raw orders joined to payments, summed per day).
+  - `finance_daily_revenue`: finance's daily totals from `orders_source`.
+
+  Investigate step by step. Write down what you expect before each reveal.
+
+setup:
+  - |
+    CREATE OR REPLACE TABLE orders_source AS
+    SELECT i AS order_id, DATE '2026-10-05' + CAST(i % 28 AS INTEGER) AS order_date,
+           1 + (i * 7) % 600 AS customer_id, CAST(20 + floor(rnd(i, 1) * 180) AS INTEGER) AS amount
+    FROM range(1, 2801) t(i)
+  - |
+    CREATE OR REPLACE TABLE payments AS
+    SELECT order_id, 'card' AS method, amount FROM orders_source WHERE rnd(order_id, 2) >= 0.08
+    UNION ALL SELECT order_id, 'gift card', round(amount * 0.3) FROM orders_source WHERE rnd(order_id, 2) < 0.08
+    UNION ALL SELECT order_id, 'card', amount - round(amount * 0.3) FROM orders_source WHERE rnd(order_id, 2) < 0.08
+  - |
+    CREATE OR REPLACE TABLE raw_orders AS
+    SELECT *, 'load_' || strftime(order_date + 1, '%Y%m%d') AS load_id FROM orders_source
+    UNION ALL
+    SELECT *, 'load_20261102_retry' FROM orders_source WHERE order_date = DATE '2026-11-01'
+  - |
+    CREATE OR REPLACE VIEW dashboard_daily_revenue AS
+    SELECT r.order_date, SUM(r.amount) AS revenue
+    FROM raw_orders r JOIN payments p USING (order_id)
+    GROUP BY 1
+  - |
+    CREATE OR REPLACE VIEW finance_daily_revenue AS
+    SELECT order_date, SUM(amount) AS revenue FROM orders_source GROUP BY 1
+
+steps:
+  - title: Where is the gap?
+    prompt: Compare the dashboard with finance day by day for last week. Is the difference spread evenly, or concentrated?
+    sql: |
+      SELECT order_date, d.revenue AS dashboard, f.revenue AS finance,
+             round(100.0 * (d.revenue / f.revenue - 1), 1) AS pct_high
+      FROM dashboard_daily_revenue d
+      JOIN finance_daily_revenue f USING (order_date)
+      WHERE order_date BETWEEN DATE '2026-10-26' AND DATE '2026-11-01'
+      ORDER BY order_date
+    finding: Every day is 7–13% too high, and Sunday 1 November is more than double (+118%). Two different patterns, so probably two different causes.
+    why: |
+      A constant-ish overstatement every day points at the logic (a join, a filter, a definition). A spike on one day points at an operational event (a load, an outage, a backfill). Splitting the gap by day is the fastest way to separate them.
+  - title: Check the grain of the join
+    prompt: The dashboard joins orders to payments. How many payment rows does each order have?
+    sql: |
+      SELECT rows_per_order, count(*) AS orders
+      FROM (SELECT order_id, count(*) AS rows_per_order FROM payments GROUP BY order_id)
+      GROUP BY rows_per_order
+      ORDER BY rows_per_order
+    finding: 220 of the 2,800 orders (about 8%) have two payment rows (gift card plus card). Joining orders to payments repeats the order amount once per payment, so those orders are counted twice.
+    why: |
+      This is join fan-out: the join changed the grain from one row per order to one row per payment, and the measure still sums at the order grain. A uniqueness test on order_id in the dashboard model's output would have caught it.
+  - title: What happened on Sunday?
+    prompt: Look at how Sunday's orders were loaded.
+    sql: |
+      SELECT load_id, count(*) AS orders, sum(amount) AS amount
+      FROM raw_orders
+      WHERE order_date = DATE '2026-11-01'
+      GROUP BY load_id
+    finding: The same 100 Sunday orders arrive in two loads, the normal Monday load and a retry. The retry appended rows instead of replacing them, so Sunday was counted twice (and then the fan-out on top).
+    why: |
+      The load isn't idempotent. A retried job must produce the same result as one successful run: overwrite the day's partition, or MERGE on order_id, never plain INSERT. A row-count check against the source per day would have flagged it.
+  - title: Rebuild it correctly
+    prompt: Deduplicate the raw orders and stop multiplying them by payments. Does the dashboard now match finance?
+    sql: |
+      WITH clean AS (
+        SELECT * FROM raw_orders
+        QUALIFY row_number() OVER (PARTITION BY order_id ORDER BY load_id) = 1
+      ), fixed AS (
+        SELECT order_date, SUM(amount) AS revenue FROM clean GROUP BY 1
+      )
+      SELECT order_date, x.revenue AS fixed, f.revenue AS finance, x.revenue - f.revenue AS diff
+      FROM fixed x JOIN finance_daily_revenue f USING (order_date)
+      WHERE order_date BETWEEN DATE '2026-10-26' AND DATE '2026-11-01'
+      ORDER BY order_date
+    finding: Every day matches finance exactly (diff 0). Last week was $78,266.
+    why: |
+      Fix the cause, not the symptom. The model should keep order grain (aggregate payments per order first if you need payment details) and the load should be idempotent. Then add the tests that would have caught both: unique order_id in the revenue model, and a daily reconciliation against the order system.
+
+resolution: |
+  **Finance is right: $78,266.** The dashboard overstated last week by 24% through two independent bugs:
+
+  1. **Join fan-out (every day, about +8%):** split payments made 8% of orders appear twice after joining to payments.
+  2. **Non-idempotent retry (Sunday, +100%):** Monday's failed load was retried and appended Sunday's orders a second time.
+
+  The fix and the guard rails: keep the model at order grain, make loads overwrite or MERGE instead of appending, and add a unique test on order_id plus a daily reconciliation against the source. See the join fan-out, retries and idempotency, and data quality modules.

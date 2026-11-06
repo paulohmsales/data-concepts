@@ -1,5 +1,5 @@
 import { use } from 'react'
-import type { Catalog, Comparison, Integration, IntegrationKey, IntegrationStatus, ModuleContent, Market, Platforms, RoleBrief, RunLog, RunResult, SearchHit } from './content.ts'
+import type { CaseContent, CaseMeta, Catalog, Comparison, Integration, IntegrationKey, IntegrationStatus, ModuleContent, Market, Platforms, RoleBrief, RunLog, RunResult, SearchHit } from './content.ts'
 
 const cache = new Map<string, Promise<unknown>>()
 
@@ -46,3 +46,5 @@ export async function runQuery(key: IntegrationKey, sql: string, dryRun = false)
   return body as RunResult
 }
 export const useComparisons = () => use(resource<Comparison[]>('/api/integrations/comparisons'))
+export const useCases = () => use(resource<CaseMeta[]>('/api/cases'))
+export const useCase = (id: string) => use(resource<CaseContent>(`/api/cases/${encodeURIComponent(id)}`))

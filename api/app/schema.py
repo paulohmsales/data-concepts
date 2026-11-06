@@ -296,3 +296,24 @@ class Comparison(BaseModel):
     question: str
     why: str
     runs: list[ComparisonRun]
+
+
+class CaseStep(BaseModel):
+    title: str
+    prompt: str
+    sql: str
+    finding: str
+    why: str
+
+
+class Case(BaseModel):
+    id: str
+    title: str
+    summary: str
+    roles: list[RoleKey]
+    related: list[str]
+    order: int
+    brief: str
+    setup: list[str]
+    steps: list[CaseStep]
+    resolution: str

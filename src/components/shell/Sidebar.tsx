@@ -29,6 +29,9 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <NavLink to="/map" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
           Concept map
         </NavLink>
+        <NavLink to="/cases" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
+          Case studies
+        </NavLink>
         <NavLink to="/platforms" className={({ isActive }) => (isActive ? styles.sideLinkActive : styles.sideLink)} onClick={onNavigate}>
           Cloud platforms compared
         </NavLink>

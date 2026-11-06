@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 from pydantic import TypeAdapter, ValidationError
 
-from .schema import Comparison, Integration, Market, Module, Platforms, Role, Track
+from .schema import Case, Comparison, Integration, Market, Module, Platforms, Role, Track
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTENT = Path(os.environ.get("CONTENT_DIR", ROOT / "content"))
@@ -78,9 +78,20 @@ def load_content(content_dir: Path = DEFAULT_CONTENT) -> dict:
         raise ContentError("integrations.yaml: duplicate recipe ids")
 
     comparisons = _validate(TypeAdapter(list[Comparison]), _load(content_dir / "comparisons.yaml"), "comparisons.yaml")
+    cases: list[Case] = []
+    for f in sorted((content_dir / "cases").glob("*.yaml")):
+        cs = _validate(TypeAdapter(Case), _load(f), f"cases/{f.name}")
+        if f.stem != cs.id:
+            raise ContentError(f"cases/{f.name}: file name must match id '{cs.id}'")
+        cases.append(cs)
+    known = {m.slug for m in modules}
+    for cs in cases:
+        for r in cs.related:
+            if r not in known:
+                raise ContentError(f"case {cs.id}: related module '{r}' does not exist")
 
     _check_references(tracks, modules, platforms)
-    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms, "integrations": integrations, "comparisons": comparisons}
+    return {"tracks": tracks, "roles": roles, "market": market, "modules": modules, "platforms": platforms, "integrations": integrations, "comparisons": comparisons, "cases": cases}
 
 
 def _check_references(tracks, modules, platforms) -> None:
@@ -147,6 +158,7 @@ CREATE TABLE prices (id INTEGER PRIMARY KEY, provider TEXT, body TEXT NOT NULL);
 CREATE TABLE architectures (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE TABLE integrations (key TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
 CREATE TABLE comparisons (id TEXT PRIMARY KEY, ord INTEGER, body TEXT NOT NULL);
+CREATE TABLE cases (id TEXT PRIMARY KEY, ord INTEGER, meta TEXT NOT NULL, body TEXT NOT NULL);
 CREATE VIRTUAL TABLE search USING fts5(kind, ref, title, body, tokenize = 'porter unicode61');
 """
 
@@ -203,6 +215,11 @@ def build(content_dir: Path = DEFAULT_CONTENT, db_path: Path = DEFAULT_DB) -> di
         con.execute("INSERT INTO integrations VALUES (?, ?, ?)", (it.key, i, j(it)))
     for i, cmp in enumerate(c["comparisons"]):
         con.execute("INSERT INTO comparisons VALUES (?, ?, ?)", (cmp.id, i, j(cmp)))
+    for cs in c["cases"]:
+        meta = {k: getattr(cs, k) for k in ("id", "title", "summary", "roles", "related", "order")}
+        meta["steps"] = len(cs.steps)
+        con.execute("INSERT INTO cases VALUES (?, ?, ?, ?)", (cs.id, cs.order, json.dumps(meta, ensure_ascii=False), j(cs)))
+        con.execute("INSERT INTO search VALUES ('case', ?, ?, ?)", (cs.id, cs.title, f"{cs.summary} {cs.brief} {cs.resolution}"))
 
     con.commit()
     con.close()

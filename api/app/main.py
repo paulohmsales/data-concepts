@@ -105,6 +105,19 @@ def comparisons():
     return cached(rows("SELECT body FROM comparisons ORDER BY ord"))
 
 
+@app.get("/api/cases")
+def cases():
+    return cached(rows("SELECT meta FROM cases ORDER BY ord"))
+
+
+@app.get("/api/cases/{case_id}")
+def case(case_id: str):
+    found = rows("SELECT body FROM cases WHERE id = ?", case_id)
+    if not found:
+        raise HTTPException(404, f"no case '{case_id}'")
+    return cached(found[0])
+
+
 @app.get("/api/search")
 def search(q: str = Query(min_length=1, max_length=100)):
     # quote each term so FTS syntax characters in user input can't break the query

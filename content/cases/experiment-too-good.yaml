@@ -1,0 +1,87 @@
+id: experiment-too-good
+title: The checkout test that “won” +5%
+summary: A new checkout page beats the old one on the dashboard. Before anyone ships it, check whether the experiment itself is broken.
+roles: [ds, da, mgr]
+related: [sample-ratio-mismatch, ab-testing, simpsons-paradox]
+order: 2
+
+brief: |
+  The growth team tested a redesigned checkout page against the current one, 50/50 by user, for two weeks. The experimentation dashboard reports conversion of **8.71% for the new page vs 8.28% for the old one, +5.2%**, and the product manager wants to ship today.
+
+  Your job is to sign off the analysis. Tables:
+
+  - `users`: one row per user, with `prior_visits` in the 30 days before the test (a rough intent signal).
+  - `assignments`: which variant each user was randomised into.
+  - `exposures`: users whose browser logged the “checkout viewed” event, which the dashboard uses as its denominator.
+  - `conversions`: users who completed a purchase.
+
+setup:
+  - |
+    CREATE OR REPLACE TABLE users AS
+    SELECT i AS user_id,
+           CASE WHEN rnd(i, 2) < 0.3 THEN 5 + CAST(floor(rnd(i, 4) * 11) AS INTEGER)
+                ELSE CAST(floor(rnd(i, 4) * 4) AS INTEGER) END AS prior_visits
+    FROM range(1, 20001) t(i)
+  - |
+    CREATE OR REPLACE TABLE assignments AS
+    SELECT user_id, CASE WHEN rnd(user_id, 1) < 0.5 THEN 'treatment' ELSE 'control' END AS variant
+    FROM users
+  - |
+    CREATE OR REPLACE TABLE exposures AS
+    SELECT a.user_id, a.variant FROM assignments a JOIN users u USING (user_id)
+    WHERE NOT (a.variant = 'treatment' AND u.prior_visits < 5 AND rnd(a.user_id, 3) < 0.15)
+  - |
+    CREATE OR REPLACE TABLE conversions AS
+    SELECT a.user_id FROM assignments a JOIN users u USING (user_id)
+    WHERE a.user_id IN (SELECT user_id FROM exposures)
+      AND rnd(a.user_id, 5) < CASE WHEN u.prior_visits >= 5 THEN 0.20 ELSE 0.03 END
+
+steps:
+  - title: Reproduce the dashboard
+    prompt: Compute conversion per variant the way the dashboard does, among exposed users.
+    sql: |
+      SELECT e.variant, count(*) AS users, count(c.user_id) AS converted,
+             round(100.0 * count(c.user_id) / count(*), 2) AS conversion_pct
+      FROM exposures e LEFT JOIN conversions c USING (user_id)
+      GROUP BY e.variant ORDER BY e.variant
+    finding: Treatment 8.71% vs control 8.28%, as reported. But look at the user counts. Treatment has 8,954 exposed users and control 9,958, in a 50/50 test.
+    why: |
+      Before reading any result, check that the split looks like the one you designed. A difference of 1,000 users out of 19,000 is not noise.
+  - title: Test the sample ratio
+    prompt: Is a 9,958 / 8,954 split plausible for a 50/50 assignment?
+    sql: |
+      WITH n AS (SELECT variant, count(*) AS k FROM exposures GROUP BY variant),
+           t AS (SELECT sum(k) AS total FROM n)
+      SELECT variant, k, round(100.0 * k / total, 2) AS pct,
+             round((SELECT sum((k - total / 2.0) ^ 2 / (total / 2.0)) FROM n, t), 1) AS chi_square
+      FROM n, t ORDER BY variant
+    finding: "52.6% vs 47.4%, chi-square about 53 (p < 0.000001): a sample ratio mismatch. The groups being compared are no longer comparable, so the +5.2% can't be trusted."
+    why: |
+      With 1 degree of freedom, a chi-square above 10.8 has p < 0.001. Most experimentation platforms block results automatically when the SRM check fails, for exactly this reason.
+  - title: Find the missing users
+    prompt: Compare assigned and exposed users per variant. Who is missing, and what are they like?
+    sql: |
+      SELECT a.variant, count(*) AS assigned, count(e.user_id) AS exposed,
+             count(*) - count(e.user_id) AS missing,
+             round(avg(CASE WHEN e.user_id IS NULL THEN u.prior_visits END), 2) AS missing_avg_prior_visits,
+             round(avg(u.prior_visits), 2) AS everyone_avg_prior_visits
+      FROM assignments a JOIN users u USING (user_id) LEFT JOIN exposures e USING (user_id)
+      GROUP BY a.variant ORDER BY a.variant
+    finding: Randomisation was fine (10,042 vs 9,958 assigned), but 1,088 treatment users never logged an exposure. They average 1.5 prior visits against 4.0 overall, so they are low-intent users. The new page is slower, and they left before the event fired.
+    why: |
+      The treatment removed low-intent users from its own denominator. The remaining treatment users are better customers on average, so “conversion among exposed” rises even if the page converts nobody extra. This is selection bias created by the treatment.
+  - title: Analyse what was randomised
+    prompt: Compute conversion per assigned variant (intention to treat), counting everyone who was randomised.
+    sql: |
+      SELECT a.variant, count(*) AS users, count(c.user_id) AS converted,
+             round(100.0 * count(c.user_id) / count(*), 2) AS conversion_pct
+      FROM assignments a LEFT JOIN conversions c USING (user_id)
+      GROUP BY a.variant ORDER BY a.variant
+    finding: Treatment 7.77% vs control 8.28%, so the new page is about 6% worse. The users it lost would have converted sometimes, and now never do.
+    why: |
+      Intention-to-treat compares the groups randomisation created, so selection inside the treatment can't bias it. It answers the business question too: what happens to conversion if we ship this page to everyone?
+
+resolution: |
+  **Don't ship.** The +5.2% came from a broken comparison. The new page's slowness made low-intent users leave before being counted, which inflated treatment's conversion rate. Counting everyone who was assigned, the new page converts **about 6% worse**.
+
+  What to do: fix the page performance, log exposure at assignment (server-side) rather than after the page renders, keep the SRM check as a hard gate on every experiment, and rerun. See the sample ratio mismatch and A/B testing modules.

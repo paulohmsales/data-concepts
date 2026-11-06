@@ -143,7 +143,7 @@ export interface Platforms {
 }
 
 export interface SearchHit {
-  kind: 'module' | 'service'
+  kind: 'module' | 'service' | 'case'
   ref: string
   title: string
   snippet: string
@@ -209,4 +209,23 @@ export interface Comparison {
   question: string
   why: string
   runs: { provider: IntegrationKey; sql: string }[]
+}
+
+/* ---------- case studies ---------- */
+
+export interface CaseMeta {
+  id: string
+  title: string
+  summary: string
+  roles: RoleKey[]
+  related: string[]
+  order: number
+  steps: number
+}
+
+export interface CaseContent extends Omit<CaseMeta, 'steps'> {
+  brief: string
+  setup: string[]
+  steps: { title: string; prompt: string; sql: string; finding: string; why: string }[]
+  resolution: string
 }

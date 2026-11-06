@@ -1,0 +1,90 @@
+id: churn-up
+title: Churn jumped right after the big promotion
+summary: The monthly churn KPI rose from 4.9% to 5.8% the month a promotion tripled signups. Is retention getting worse?
+roles: [da, ds, mgr]
+related: [metric-trees, simpsons-paradox, cohorts]
+order: 3
+
+brief: |
+  A subscription business ran a big promotion in **month 12** and signed up 4,000 customers instead of the usual 1,000. That same month the churn KPI (customers cancelling ÷ customers active at the start of the month) went from **4.9% to 5.8%**, an increase of almost a fifth. The leadership deck says “retention is deteriorating” and asks whether the promotion attracted bad customers or whether the product got worse.
+
+  One table, `customer_months`: one row per customer per month they were active, with their `tenure` (months since signup), a `tenure_band`, and `churned` (true in the month they cancelled).
+
+setup:
+  - |
+    CREATE OR REPLACE TABLE customers AS
+    SELECT row_number() OVER () AS customer_id, m AS signup_month
+    FROM range(0, 18) s(m), range(0, 4000) k(j)
+    WHERE j < CASE WHEN m = 12 THEN 4000 ELSE 1000 END
+  - |
+    CREATE OR REPLACE TABLE customer_months AS
+    WITH grid AS (
+      SELECT c.customer_id, c.signup_month, m AS month, m - c.signup_month AS tenure,
+             rnd(c.customer_id * 31 + m, 7) < CASE WHEN m - c.signup_month < 3 THEN 0.09
+                                                   WHEN m - c.signup_month < 12 THEN 0.03 ELSE 0.015 END AS cancels
+      FROM customers c, range(0, 18) t(m) WHERE m >= c.signup_month
+    ), first_cancel AS (
+      SELECT customer_id, min(month) FILTER (WHERE cancels) AS churn_month FROM grid GROUP BY 1
+    )
+    SELECT g.customer_id, g.month, g.tenure,
+           CASE WHEN g.tenure < 3 THEN '0-2 months' WHEN g.tenure < 12 THEN '3-11 months' ELSE '12+ months' END AS tenure_band,
+           coalesce(g.month = f.churn_month, false) AS churned
+    FROM grid g JOIN first_cancel f USING (customer_id)
+    WHERE f.churn_month IS NULL OR g.month <= f.churn_month
+
+steps:
+  - title: Reproduce the KPI
+    prompt: Monthly churn rate from month 6 onwards. What does the trend look like around the promotion?
+    sql: |
+      SELECT month, count(*) AS active, sum(churned::INT) AS churned,
+             round(100.0 * avg(churned::INT), 2) AS churn_pct
+      FROM customer_months
+      WHERE month >= 6
+      GROUP BY month ORDER BY month
+    finding: Churn steps up from 4.91% in month 11 to 5.84% in month 12, stays elevated for two months, then falls to about 4% from month 15 onwards, lower than before the promotion.
+    why: |
+      A bump that appears with the promotion and disappears three months later is suspicious. Real product problems don't usually fix themselves on that schedule. Something about who is in the denominator is changing.
+  - title: Split by tenure
+    prompt: Churn by tenure band, before (months 10–11) and after (months 13–14) the promotion. Did any band get worse?
+    sql: |
+      SELECT tenure_band,
+             round(100.0 * avg(CASE WHEN month IN (10, 11) THEN churned::INT END), 1) AS before_pct,
+             round(100.0 * avg(CASE WHEN month IN (13, 14) THEN churned::INT END), 1) AS after_pct
+      FROM customer_months
+      WHERE month IN (10, 11, 13, 14)
+      GROUP BY tenure_band ORDER BY tenure_band
+    finding: Within each band nothing changed. New customers (0–2 months) churn about 9% a month before and after; customers at 3–11 months about 3%; customers past their first year (who only exist from month 12) about 2%.
+    why: |
+      If no group got worse but the total did, the groups' sizes changed. That's the mix effect from the KPI trees module, and the same mechanism as Simpson's paradox.
+  - title: Look at the mix
+    prompt: What share of active customers were in their first three months, each month?
+    sql: |
+      SELECT month, count(*) AS active,
+             round(100.0 * avg((tenure_band = '0-2 months')::INT), 1) AS new_customer_share_pct
+      FROM customer_months
+      WHERE month BETWEEN 9 AND 16
+      GROUP BY month ORDER BY month
+    finding: The share of customers in their risky first three months jumps from 31% to 46% in month 12, then falls to about 20% once the promotion cohort passes month three.
+    why: |
+      New customers always churn more. The promotion didn't make anyone churn more; it temporarily made the customer base younger.
+  - title: Hold the mix constant
+    prompt: Recompute each month's churn as if the tenure mix had stayed as it was in month 11.
+    sql: |
+      WITH rates AS (
+        SELECT month, tenure_band, avg(churned::INT) AS rate, count(*) AS n
+        FROM customer_months GROUP BY month, tenure_band
+      ), mix11 AS (
+        SELECT tenure_band, n * 1.0 / sum(n) OVER () AS weight FROM rates WHERE month = 11
+      )
+      SELECT r.month, round(100.0 * sum(r.rate * m.weight), 2) AS churn_pct_at_month_11_mix
+      FROM rates r JOIN mix11 m USING (tenure_band)
+      WHERE r.month BETWEEN 10 AND 16
+      GROUP BY r.month ORDER BY r.month
+    finding: With the month-11 mix, churn stays between about 4.7% and 5.2% throughout. The whole rise in the KPI is mix.
+    why: |
+      Standardising to a fixed mix (direct standardisation) separates “who we have” from “how each kind of customer behaves”. Report both numbers when the mix moves.
+
+resolution: |
+  **Retention didn't deteriorate.** The promotion brought 4,000 customers who behave exactly like other new customers: about 9% churn in each of their first three months, then about 3%. Because new customers suddenly made up 46% of the base instead of 31%, the blended KPI rose, and it falls back (below its old level) once that cohort ages.
+
+  The right questions about the promotion are cohort questions: how many of the 4,000 are still active after 3, 6 and 12 months, and did their lifetime value cover the discount? For the KPI, report churn by tenure band (or cohort) alongside the blended number, so a mix shift never again looks like a product problem. See the KPI trees, Simpson's paradox and cohorts modules.
